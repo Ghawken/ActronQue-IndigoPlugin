@@ -487,10 +487,13 @@ class Plugin(indigo.PluginBase):
                 MainStatus = indigo.kHvacMode.Heat
             elif CompressorMode =="COOL" :
                 MainStatus = indigo.kHvacMode.Cool
-            tempInputsAll = str(','.join(map(str, listzonetemps)) )
-            averageTemp = reduce(lambda a,b:a+b, listzonetemps) / len(listzonetemps)
-            humdInputsAll = str(','.join(map(str, listzonehumidity)))
-            averageHum = reduce(lambda a, b: a + b, listzonehumidity) / len(listzonehumidity)
+            averageTemp = 0
+            averageHum = 0
+            if len(listzonetemps) > 1:
+                tempInputsAll = str(','.join(map(str, listzonetemps)) )
+                averageTemp = reduce(lambda a,b:a+b, listzonetemps) / len(listzonetemps)
+                humdInputsAll = str(','.join(map(str, listzonehumidity)))
+                averageHum = reduce(lambda a, b: a + b, listzonehumidity) / len(listzonehumidity)
 
             self.logger.debug(unicode(tempInputsAll))
             stateList = [
