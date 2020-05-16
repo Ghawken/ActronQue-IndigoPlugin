@@ -489,6 +489,8 @@ class Plugin(indigo.PluginBase):
                 MainStatus = indigo.kHvacMode.Cool
             averageTemp = 0
             averageHum = 0
+            tempInputsAll = []
+            humdInputAll = []
             if len(listzonetemps) > 1:
                 tempInputsAll = str(','.join(map(str, listzonetemps)) )
                 averageTemp = reduce(lambda a,b:a+b, listzonetemps) / len(listzonetemps)
