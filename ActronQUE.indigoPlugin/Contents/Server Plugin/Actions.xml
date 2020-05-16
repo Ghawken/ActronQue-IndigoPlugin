@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<Actions>
+      <Action id="setFanSpeed">
+        <Name>Set Fan Speed</Name>
+        <CallbackMethod>setFanSpeed</CallbackMethod>
+        <ConfigUI>
+           	<Field id="Speed" type="menu" defaultValue="LOW">
+				<Label>Fan Speed:</Label>
+				<List>
+					<Option value="HIGH">High Fan Speed</Option>
+					<Option value="MED">Medium Fan Speed</Option>
+					<Option value="LOW">Low Fan Speed</Option>
+					<Option value="AUTO">Auto Fan Speed</Option>
+				</List>
+            </Field>
+			<Field id="deviceID" type="menu">
+                <Label>Select Device:</Label>
+                <List class="indigo.devices" filter="self.ActronQueMain"/>
+            </Field>
+
+        </ConfigUI>
+    </Action>
+ <Action id="setZone">
+        <Name>Turn Zone Off or Off</Name>
+        <CallbackMethod>setZone</CallbackMethod>
+        <ConfigUI>
+           	<Field id="setting" type="menu" defaultValue="OFF">
+				<Label>Zone Setting:</Label>
+				<List>
+					<Option value="OFF">Off</Option>
+					<Option value="ON">On</Option>
+				</List>
+            </Field>
+			<Field id="deviceID" type="menu">
+                <Label>Select Device:</Label>
+                <List class="indigo.devices" filter="self.queZone"/>
+            </Field>
+
+        </ConfigUI>
+    </Action>
+
+
+
+  
+</Actions>
+

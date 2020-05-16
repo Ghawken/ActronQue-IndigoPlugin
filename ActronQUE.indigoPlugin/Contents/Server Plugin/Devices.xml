@@ -1,0 +1,238 @@
+<?xml version="1.0"?>
+<Devices>
+<Device type="thermostat" id="ActronQueMain" >
+     <Name>Actron Que Main Device</Name>
+	<ConfigUI>
+            <Field id="username"
+				   type="textfield"
+				   tooltip=""
+				   default=""                   >
+
+				<Label>Enter the Username:</Label>
+			</Field>
+
+        <Field id="password"
+				   type="textfield"
+				   tooltip=""
+				   default=""                   >
+				<Label>Enter your Password:</Label>
+			</Field>
+      <Field id="sep2aa24" type="separator"/>
+
+       <Field id="generateZoneDevices"
+				   type="button"
+				   tooltip="Click on to Generate/Update Zone Devices"  >
+				<Label>Generate Zone Devices</Label>
+				<Title>Generate Zone Devices</Title>
+				<CallbackMethod>generateZoneDevices</CallbackMethod>
+	</Field>
+          <Field id="label2b2" type="label" fontSize="small" fontColor="black">
+    <Label>Press the above to Generate Zone Devices within Same Directory as Que Main Device</Label>
+          </Field>
+      <Field id="sep224" type="separator"/>
+
+        <Field id="accessToken"
+				   type="textfield"
+				   tooltip=""
+				   default=""
+        hidden="true" >
+			</Field>
+        <Field id="accessExpire"
+				   type="textfield"
+				   tooltip=""
+				   default=""
+                hidden="true"        >
+			</Field>
+                <Field id="serialNo"
+				   type="textfield"
+				   tooltip=""
+				   default=""
+                hidden="true"
+                >
+			</Field>
+        <Field id="zoneNames"
+				   type="textfield"
+				   tooltip=""
+				   default=""
+                hidden="true"
+                >
+			</Field>
+
+        <Field id="NumHumdityInputs"
+				   type="textfield"
+				   tooltip=""
+				   default="1"
+               value="1"
+                hidden="true"
+                >
+			</Field>
+
+
+		</ConfigUI>
+     <States>
+             <State id="indoorModel">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Indoor Model</TriggerLabel>
+                <ControlPageLabel>Indoor Model</ControlPageLabel>
+            </State>
+                      <State id="outdoorUnitCompMode">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Outdoor Compressor Mode</TriggerLabel>
+                <ControlPageLabel>Outdoor Compressor Mode</ControlPageLabel>
+            </State>
+                     <State id="fanSpeed">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Fan Speed Setting</TriggerLabel>
+                <ControlPageLabel>Fan Speed Setting</ControlPageLabel>
+            </State>
+		   <State id="serialNumber">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Serial Number</TriggerLabel>
+                <ControlPageLabel>Serial Number</ControlPageLabel>
+            </State>
+		 		   <State id="alertCleanFilter">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>alert Clean Filter</TriggerLabel>
+                <ControlPageLabel>alert Clean Filter</ControlPageLabel>
+            </State>
+         <State id="alertDRED">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>alert DRED</TriggerLabel>
+                <ControlPageLabel>alert DRED</ControlPageLabel>
+            </State>
+		 <State id="alertDefrosting">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>alert Defrosting</TriggerLabel>
+			 <ControlPageLabel>alert Defrosting</ControlPageLabel>
+            </State>
+		 		 <State id="indoorFanRPM">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Indoor Fan RPM</TriggerLabel>
+			 <ControlPageLabel>Panel Reported Firmware</ControlPageLabel>
+            </State>
+		 		 <State id="indoorFanPWM">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>IndoorFan PWM</TriggerLabel>
+			 <ControlPageLabel>IndoorFan PWM</ControlPageLabel>
+            </State>
+		 		 <State id="indoorUnitTemp">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Temp of Indoor Unit in Roof Space</TriggerLabel>
+			 <ControlPageLabel>Temp of Indoor Unit in Roof Space</ControlPageLabel>
+            </State>
+            <State id="outdoorUnitTemp">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Outdoor Unit Temperature</TriggerLabel>
+				<ControlPageLabel>Outdoor Unit Temperature</ControlPageLabel>
+             </State>
+		    <State id="deviceIsOnline">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Device Online</TriggerLabel>
+				<ControlPageLabel>Device is Online</ControlPageLabel>
+             </State>
+             <State id="outdoorUnitPower">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Outdoor Unit Compressor Power</TriggerLabel>
+				 <ControlPageLabel>Outdoor Unit Compressor Power</ControlPageLabel>
+            </State>
+            <State id="outdoorUnitPWM">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Outdoor Unit Compressor PWM</TriggerLabel>
+				<ControlPageLabel>Outdoor Unit Compressor PWM</ControlPageLabel>
+            </State>
+         <State id="outdoorUnitCompSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Outdoor Unit Compressor Speed</TriggerLabel>
+				<ControlPageLabel>Outdoor Unit Compressor Speed</ControlPageLabel>
+            </State>
+                  <State id="outdoorUnitFanSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Outdoor Unit Fan Speed</TriggerLabel>
+				<ControlPageLabel>Outdoor Unit Fan Speed</ControlPageLabel>
+            </State>
+        </States>
+    <UiDisplayStateId>alarmState</UiDisplayStateId>
+ </Device>
+
+  	<Device type="thermostat" id="queZone">
+		<Name>Que AC Zone</Name>
+			<!-- The ConfigUI here is just an example of the type of device
+			specific UI that might be needed. Here you might specify a text
+			field for an IP address, a serial port popup, or other device
+			specific options.
+			-->
+			<ConfigUI>
+		</ConfigUI>
+
+		<States>
+            <State id="currentTemp">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Temp</TriggerLabel>
+                <ControlPageLabel>Current Temp</ControlPageLabel>
+            </State>
+            <State id="currentTempHystersis">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Temp Hystersis</TriggerLabel>
+                <ControlPageLabel>Current Temp Hystersis</ControlPageLabel>
+            </State>
+            <State id="sensorBattery">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Sensor Battery Level</TriggerLabel>
+                <ControlPageLabel>Sensor Battery Level</ControlPageLabel>
+            </State>
+                        <State id="sensorId">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Sensor ID</TriggerLabel>
+                <ControlPageLabel>Sensor ID</ControlPageLabel>
+            </State>
+                        <State id="onOffState">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>On or Off State</TriggerLabel>
+                <ControlPageLabel>On or Off State</ControlPageLabel>
+            </State>
+            <State id="currentHumidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Humidity</TriggerLabel>
+                <ControlPageLabel>Current Humidity</ControlPageLabel>
+            </State>
+            <State id="zoneName">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Zone Name</TriggerLabel>
+                <ControlPageLabel>Zone Name</ControlPageLabel>
+            </State>
+
+            <State id="canOperate">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Can Operate</TriggerLabel>
+                <ControlPageLabel>Can Operate</ControlPageLabel>
+            </State>
+            <State id="zoneNumber">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Zone Number</TriggerLabel>
+                <ControlPageLabel>Zone Number</ControlPageLabel>
+            </State>
+                        <State id="zonePosition">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Zone Position</TriggerLabel>
+                <ControlPageLabel>Zone Position</ControlPageLabel>
+            </State>
+
+          <State id="TempSetPointCool">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Temp Set Point Cool</TriggerLabel>
+                <ControlPageLabel>Temp Set Point Cool</ControlPageLabel>
+            </State>
+                      <State id="TempSetPointHeat">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Temp Set Point Heat</TriggerLabel>
+                <ControlPageLabel>Temp Set Point Heat</ControlPageLabel>
+            </State>
+                      <State id="deviceMasterController">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Main Device ID</TriggerLabel>
+                <ControlPageLabel>Main Device ID</ControlPageLabel>
+            </State>
+		</States>
+	</Device>
+
+</Devices>
