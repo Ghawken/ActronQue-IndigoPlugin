@@ -1,6 +1,6 @@
 # Actron Que AC IndigoPlugin
 
-![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQue.indigoPlugin/Contents/Resources/icon400.png?raw=true)
+![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/icon400.png?raw=true)
 
 Indigodomo Plugin for Actron Que Ducted AC Sytems
 
@@ -19,20 +19,33 @@ Install
 
 Create Actron Main Que Device.
 Enter Actron Account Details.
+
+![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueMainSetup.png?raw=true)
+
+
 Press Create Zone Devices
 8 Zone devices will be create in the same directory as main device
 
 You will be able to access multiple status from both the main Que device, including power usage, sound frequency.
 Temperature readings from each zone are also accessible.
 
+![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueMainStatus.png?raw=true)
+
+![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueZone.png?raw=true)
+
+
+
 Most of the relevant Indigo thermostat controls function
-Increase set-point, decrease
-Change Mode
+eg. Increase set-point, decrease
+Change Mode Heat/Cool/Off
 
 There are two additional action groups to turn a zone on or off
 & to change fan speed.
 
-F
+Some of the control options vary depending whether targetting a zone or main controller.
+Can't change main mode (heat -> cool) via zone for example.  
 
+Early release, but as I am increasingly finding - often just runs without problem for long period so never actually update/change hence the release
 
+Cheers
 
