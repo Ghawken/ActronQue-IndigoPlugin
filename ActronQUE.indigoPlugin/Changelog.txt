@@ -1,3 +1,9 @@
+0.0.8
+
+Add check for running system before can open/close zones
+Add recheck to Token if connection errors
+
+
 0.0.6
 
 Change Zone Off/On reporting based on zone off/on setting rather than ZonePositioning which can turn a zone off if reaches temp (but technically still enabled)

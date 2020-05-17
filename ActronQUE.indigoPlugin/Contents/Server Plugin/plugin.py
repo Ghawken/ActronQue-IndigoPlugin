@@ -370,6 +370,7 @@ class Plugin(indigo.PluginBase):
             SystemSetpoint_Cool = float(0)
             SystemSetpoint_Heat = float(0)
             MainStatus = indigo.kHvacMode.Off
+            zonenames = ""
 
             if 'lastKnownState' in jsonResponse:
                 if "<"+serialNo.upper()+">" in jsonResponse['lastKnownState']:
@@ -417,7 +418,7 @@ class Plugin(indigo.PluginBase):
                         listzonesopen = jsonResponse['lastKnownState']['UserAirconSettings']['EnabledZones']
                         self.logger.debug(u"List of Zone Status:"+unicode(listzonesopen))
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
-                    zonenames = ""
+
                     for x in range (0,8):
                         ## go through all zones
                         self.logger.debug("Zone Number:"+unicode(x))
@@ -599,9 +600,10 @@ class Plugin(indigo.PluginBase):
             return accessToken
 
         except Exception, e:
-            self.logger.exception("Error getting Pairing Token : " + repr(e))
+            self.logger.debug("Error getting Pairing Token : " + repr(e))
             self.logger.debug( "Error connecting"+unicode(e.message))
             self.connected = False
+            return ""
 
     ########################################
     # Thermostat Action callback
@@ -726,6 +728,10 @@ class Plugin(indigo.PluginBase):
         zonedevice = indigo.devices[int(deviceID)]
         accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
         mainDevicehvacMode = maindevice.states['hvacOperationMode']
+
+        if mainDevicehvacMode == indigo.kHvacMode.Off:
+            self.logger.info("Main Que Device is Off.  System needs to be running to open/close Zones.")
+            return
 
         if accessToken == "error" or serialNo=="error":
             self.logger.info("Unable to complete accessToken or Serial No issue")
