@@ -351,6 +351,7 @@ class Plugin(indigo.PluginBase):
             jsonResponse = r.json()
             listzonetemps = []
             listzonehumidity = []
+            listzonesopen = [False,False,False,False,False,False,False,False]
             indoorModel = ""
             alertCF = False
             alertDRED = False
@@ -411,7 +412,10 @@ class Plugin(indigo.PluginBase):
                         SystemSetpoint_Cool = jsonResponse['lastKnownState']['UserAirconSettings']['TemperatureSetpoint_Cool_oC']
                     if 'TemperatureSetpoint_Heat_oC' in jsonResponse['lastKnownState']['UserAirconSettings']:
                         SystemSetpoint_Heat = jsonResponse['lastKnownState']['UserAirconSettings']['TemperatureSetpoint_Heat_oC']
-
+                    if 'EnabledZones' in jsonResponse['lastKnownState']['UserAirconSettings']:
+                        #self.logger.error(unicode(jsonResponse['lastKnownState']['UserAirconSettings']['EnabledZones']))
+                        listzonesopen = jsonResponse['lastKnownState']['UserAirconSettings']['EnabledZones']
+                        self.logger.debug(u"List of Zone Status:"+unicode(listzonesopen))
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
                     zonenames = ""
                     for x in range (0,8):
@@ -435,6 +439,8 @@ class Plugin(indigo.PluginBase):
                                 sensorbattery = int(0)
                                 sensorid =""
                                 ZoneStatus = indigo.kHvacMode.Off  ## Cool, HeatCool, Heat, Off
+                                zoneOpen = False
+
                                 if 'CanOperate' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     canoperate = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['CanOperate']
                                 if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
@@ -453,15 +459,25 @@ class Plugin(indigo.PluginBase):
                                         sensorid = key
                                     if 'Battery_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['Sensors'][key]:
                                         sensorbattery = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['Sensors'][key]['Battery_pc']
+                                # correct - as when zoneposition is 0 the zone is turned off, but! zone may in need be enabled
+                                # so not corrrect
+                                # saver to user the enabled zone to set Mode.off and report Zoneposition for use
                                 if 'ZonePosition' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     ZonePosition = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['ZonePosition']
-                                    if ZonePosition ==0:
-                                        ZoneStatus = indigo.kHvacMode.Off
-                                    if ZonePosition > 0:
-                                        if CompressorMode == "HEAT":
-                                            ZoneStatus = indigo.kHvacMode.Heat
-                                        else:
-                                            ZoneStatus = indigo.kHvacMode.Cool
+
+                                if listzonesopen[x]==True:
+                                    if CompressorMode=="HEAT":
+                                        ZoneStatus = indigo.kHvacMode.Heat
+                                    else:
+                                        ZoneStatus = indigo.kHvacMode.Cool
+                                else:
+                                    ZoneStatus = indigo.kHvacMode.Off
+
+                                if int(ZonePosition) ==0:
+                                    zoneOpen = False
+                                else:
+                                    zoneOpen = True
+
                                 listzonetemps.append(livetemp)
                                 listzonehumidity.append(livehumidity)
                                 zoneStatelist =[
@@ -473,6 +489,8 @@ class Plugin(indigo.PluginBase):
                                     {'key': 'currentHumidity', 'value': livehumidity},
                                     {'key': 'sensorBattery', 'value': sensorbattery},
                                     {'key': 'sensorId', 'value': sensorid},
+                                    {'key': 'zoneisEnabled', 'value': listzonesopen[x]},
+                                    {'key': 'zoneisOpen', 'value': zoneOpen},
                                     {'key': 'hvacOperationMode', 'value': ZoneStatus},
                                     {'key': 'TempSetPointCool', 'value': tempsetpointcool},
                                     {'key': 'TempSetPointHeat', 'value': tempsetpointheat},
@@ -697,8 +715,8 @@ class Plugin(indigo.PluginBase):
 
 
     def setZone(self, action):
-        self.logger.debug(u"setFanSpeed Called as Action.")
-        zoneonoroff = action.props.get('setting',"OFF")
+        self.logger.debug(u"setZone Called as Action.")
+        zoneonoroff = action.props.get('setting',"OFF")  #add TOGGLE
         deviceID = action.props.get("deviceID","")
 
         if deviceID =="":
@@ -716,7 +734,7 @@ class Plugin(indigo.PluginBase):
             ## if a zone device needs different command
             ## probably best to be OFF or anything else
             zoneNumber = str(int(zonedevice.states['zoneNumber'])-1)  # counts zones from zero
-            if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off and zoneonoroff == "ON":
+            if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off and (zoneonoroff == "ON" or zoneonoroff=="TOGGLE"):
                 ## need to turn on Zone
                 if self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", True):
                     self.logger.info("Turning on Zone number "+unicode(zoneNumber))
@@ -731,9 +749,71 @@ class Plugin(indigo.PluginBase):
                     sendSuccess = True
                 else:
                     self.logger.info("Error completing command, aborted")
+            elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off and (zoneonoroff == "OFF" or zoneonoroff=="TOGGLE"):
+                ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
+                if self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False):
+                    self.logger.info("Turning off Zone number "+unicode(zoneNumber))
+                    zonedevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
+                    sendSuccess = True
+                else:
+                    self.logger.info("Error completing command, aborted")
+
 
         return
 
+    def setMain(self, action):
+        self.logger.debug(u"setMain Device Called as Action.")
+        onoroff = action.props.get('setting',"OFF")  #add TOGGLE
+        deviceID = action.props.get("deviceID","")
+        sendSuccess= False
+
+        if deviceID =="":
+            self.logger.info("Details not correct.")
+            return
+
+        maindevicegiven = indigo.devices[int(deviceID)]
+        accessToken, serialNo, maindevice = self.returnmainAccessSerial(maindevicegiven)
+        mainDevicehvacMode = maindevice.states['hvacOperationMode']
+
+        if accessToken == "error" or serialNo=="error":
+            self.logger.info("Unable to complete accessToken or Serial No issue")
+            return
+
+        if maindevice.deviceTypeId == "ActronQueMain":
+            ## if a zone device needs different command
+            ## probably best to be OFF or anything else
+            if mainDevicehvacMode == indigo.kHvacMode.Off and (onoroff == "ON" or onoroff=="TOGGLE"):
+                ## need to turn on and change mode
+                if self.sendCommand(accessToken, serialNo, "UserAirconSettings.isOn", True):
+                    self.logger.info("Turning on AC System.")
+                    sendSuccess = True
+                else:
+                    self.logger.info("Error completing command, aborted")
+                    return
+            elif onoroff == "OFF":  ## need to turn AC off
+                if self.sendCommand(accessToken, serialNo, "UserAirconSettings.isOn", False):
+                    self.logger.info("Turning off AC System")
+                    sendSuccess = True
+                else:
+                    self.logger.info("Error completing command, aborted")
+                    return
+                ## only for main device
+            elif mainDevicehvacMode != indigo.kHvacMode.Off and (onoroff == "OFF" or onoroff=="TOGGLE"):
+                ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
+                if self.sendCommand(accessToken, serialNo, "UserAirconSettings.isOn", False):
+                    self.logger.info("Turning off AC System.")
+                    sendSuccess = True
+                else:
+                    self.logger.info("Error completing command, aborted")
+                    return
+
+        if sendSuccess:
+            # If success then log that the command was successfully sent.
+            indigo.server.log(u"Sent \"%s\" mode change to %s" % (maindevice.name, onoroff))
+            if "hvacOperationMode" in maindevice.states:
+                if onoroff == "OFF":
+                    maindevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
+        return
 
     ########################################
     def _refreshStatesFromHardware(self, dev):
@@ -915,8 +995,10 @@ class Plugin(indigo.PluginBase):
             r = requests.post(url, headers=headers,json=payload, timeout=10)
             self.logger.debug(r.text)
             if r.status_code != 200:
-                self.logger.info("Error Message from get System Status")
+                self.logger.info("Error Message from get System Status.  Rerunning Token check.")
                 self.logger.debug(unicode(r.text))
+                # Authorisation may have failed/taken over
+                self.checkMainDevices()
                 return False
             return True
         except requests.Timeout:

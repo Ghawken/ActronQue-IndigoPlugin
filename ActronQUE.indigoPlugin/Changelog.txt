@@ -1,0 +1,12 @@
+0.0.6
+
+Change Zone Off/On reporting based on zone off/on setting rather than ZonePositioning which can turn a zone off if reaches temp (but technically still enabled)
+Add zoneisEnabled setting for buttons etc
+Add zoneisOpen - this may change depending on temp set point for zone, eg. can be enabled, but still closed if temp reached
+Add Zone Toggle Action - On/Off/Toggle - good for control page buttons
+Add Main Device Toggle On/Off doesn't change Mode
+Check for Token issues
+
+0.0.5
+
+Bug fix for no zones at startup

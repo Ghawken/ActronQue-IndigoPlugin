@@ -185,10 +185,15 @@
                 <TriggerLabel>Sensor ID</TriggerLabel>
                 <ControlPageLabel>Sensor ID</ControlPageLabel>
             </State>
-                        <State id="onOffState">
+            <State id="zoneisEnabled">
                 <ValueType>Boolean</ValueType>
-                <TriggerLabel>On or Off State</TriggerLabel>
-                <ControlPageLabel>On or Off State</ControlPageLabel>
+                <TriggerLabel>Zone Enabled or not (True or False)</TriggerLabel>
+                <ControlPageLabel>Zone Enabled or not (True or False)</ControlPageLabel>
+            </State>
+            <State id="zoneisOpen">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Zone is Open or Closed (True or False)</TriggerLabel>
+                <ControlPageLabel>Zone is Open of Closed(True or False)</ControlPageLabel>
             </State>
             <State id="currentHumidity">
                 <ValueType>Number</ValueType>

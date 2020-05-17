@@ -21,7 +21,7 @@
         </ConfigUI>
     </Action>
  <Action id="setZone">
-        <Name>Turn Zone Off or Off</Name>
+        <Name>Turn Zone On/Off/Toggle</Name>
         <CallbackMethod>setZone</CallbackMethod>
         <ConfigUI>
            	<Field id="setting" type="menu" defaultValue="OFF">
@@ -29,6 +29,7 @@
 				<List>
 					<Option value="OFF">Off</Option>
 					<Option value="ON">On</Option>
+                    <Option value="TOGGLE">Toggle</Option>
 				</List>
             </Field>
 			<Field id="deviceID" type="menu">
@@ -38,7 +39,25 @@
 
         </ConfigUI>
     </Action>
+ <Action id="setMain">
+        <Name>Turn Main Unit On/Off/Toggle</Name>
+        <CallbackMethod>setMain</CallbackMethod>
+        <ConfigUI>
+           	<Field id="setting" type="menu" defaultValue="OFF">
+				<Label>Main Setting:</Label>
+				<List>
+					<Option value="OFF">Off</Option>
+					<Option value="ON">On</Option>
+                    <Option value="TOGGLE">Toggle</Option>
+				</List>
+            </Field>
+			<Field id="deviceID" type="menu">
+                <Label>Select Device:</Label>
+                <List class="indigo.devices" filter="self.ActronQueMain"/>
+            </Field>
 
+        </ConfigUI>
+    </Action>
 
 
   
