@@ -26,13 +26,10 @@ except:
 
 ################################################################################
 kHvacModeEnumToStrMap = {
-	indigo.kHvacMode.Cool				: u"cool",
-	indigo.kHvacMode.Heat				: u"heat",
-	indigo.kHvacMode.HeatCool			: u"auto",
-	indigo.kHvacMode.Off				: u"off",
-	indigo.kHvacMode.ProgramHeat		: u"program heat",
-	indigo.kHvacMode.ProgramCool		: u"program cool",
-	indigo.kHvacMode.ProgramHeatCool	: u"program auto"
+	indigo.kHvacMode.Cool				: u"COOL",
+	indigo.kHvacMode.Heat				: u"HEAT",
+	indigo.kHvacMode.HeatCool			: u"AUTO",
+	indigo.kHvacMode.Off				: u"OFF"
 }
 
 kFanModeEnumToStrMap = {
@@ -409,6 +406,8 @@ class Plugin(indigo.PluginBase):
                         FanMode = jsonResponse['lastKnownState']['UserAirconSettings']['FanMode']
                     if 'Mode' in jsonResponse['lastKnownState']['UserAirconSettings']:
                         WorkingMode = jsonResponse['lastKnownState']['UserAirconSettings']['Mode']
+                        userACmode = jsonResponse['lastKnownState']['UserAirconSettings']['Mode']
+                        self.logger.debug(u"userACMode:" + unicode(userACmode))
                     if 'TemperatureSetpoint_Cool_oC' in jsonResponse['lastKnownState']['UserAirconSettings']:
                         SystemSetpoint_Cool = jsonResponse['lastKnownState']['UserAirconSettings']['TemperatureSetpoint_Cool_oC']
                     if 'TemperatureSetpoint_Heat_oC' in jsonResponse['lastKnownState']['UserAirconSettings']:
@@ -417,8 +416,30 @@ class Plugin(indigo.PluginBase):
                         #self.logger.error(unicode(jsonResponse['lastKnownState']['UserAirconSettings']['EnabledZones']))
                         listzonesopen = jsonResponse['lastKnownState']['UserAirconSettings']['EnabledZones']
                         self.logger.debug(u"List of Zone Status:"+unicode(listzonesopen))
-                if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
+                    if 'isOn' in jsonResponse['lastKnownState']['UserAirconSettings']:
+                        isACturnedOn = jsonResponse['lastKnownState']['UserAirconSettings']['isOn']
+                        self.logger.debug(u"acTurnedOn:" + unicode(isACturnedOn))
 
+                if bool(isACturnedOn):
+                    ## AC is on, may or may not be running
+                    self.logger.debug("ACturnedOn True:")
+                    # userACmode OFF,HEAT,COOL,AUTO - however OFF just means not running now
+                    if userACmode == "AUTO":
+                        MainStatus = indigo.kHvacMode.HeatCool
+                    elif userACmode == "HEAT":
+                        MainStatus = indigo.kHvacMode.Heat
+                    elif userACmode == "COOL":
+                        MainStatus = indigo.kHvacMode.Cool
+                    # if CompressorMode == "HEAT":
+                    #     MainStatus = indigo.kHvacMode.Heat
+                    # elif CompressorMode =="COOL" :
+                    #    MainStatus = indigo.kHvacMode.Cool
+                    else:
+                        MainStatus = indigo.kHvacMode.HeatCool
+                else:
+                    MainStatus = indigo.kHvacMode.Off
+
+                if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
                     for x in range (0,8):
                         ## go through all zones
                         self.logger.debug("Zone Number:"+unicode(x))
@@ -467,10 +488,16 @@ class Plugin(indigo.PluginBase):
                                     ZonePosition = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['ZonePosition']
 
                                 if listzonesopen[x]==True:
-                                    if CompressorMode=="HEAT":
-                                        ZoneStatus = indigo.kHvacMode.Heat
+                                    if bool(isACturnedOn): ## AC Turned On may not be running
+                                        ZoneStatus = MainStatus
+                           #             if CompressorMode=="HEAT":
+                           #                 ZoneStatus = indigo.kHvacMode.Heat
+                           #             elif CompressorMode == "COOL":
+                           #                 ZoneStatus = indigo.kHvacMode.Cool
+                           #             else:
+                           #                 ZoneStatus = indigo.kHvacMode.HeatCool  ## not running so don'tknow
                                     else:
-                                        ZoneStatus = indigo.kHvacMode.Cool
+                                        ZoneStatus = indigo.kHvacMode.Off
                                 else:
                                     ZoneStatus = indigo.kHvacMode.Off
 
@@ -499,13 +526,10 @@ class Plugin(indigo.PluginBase):
                                     {'key': 'deviceMasterController', 'value': device.id},
                                 #    {'key': 'setpointHeat', 'value': tempsetpointheat}
                                 ]
-
                                 dev.updateStatesOnServer(zoneStatelist)
 
-            if CompressorMode == "HEAT":
-                MainStatus = indigo.kHvacMode.Heat
-            elif CompressorMode =="COOL" :
-                MainStatus = indigo.kHvacMode.Cool
+
+
             averageTemp = 0
             averageHum = 0
             tempInputsAll = []

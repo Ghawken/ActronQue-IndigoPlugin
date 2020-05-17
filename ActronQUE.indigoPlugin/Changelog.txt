@@ -1,3 +1,8 @@
+0.0.9
+
+Don't use compressor mode for mode - if not running as doesn't need will show system as off
+Use Heat/Cool in this scenario as doesn't know whether heating/cooling occuring.
+
 0.0.8
 
 Add check for running system before can open/close zones
