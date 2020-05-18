@@ -386,17 +386,21 @@ class Plugin(indigo.PluginBase):
                         fanRPM = jsonResponse['lastKnownState']['LiveAircon']['FanRPM']
                     if 'IndoorUnitTemp' in jsonResponse['lastKnownState']['LiveAircon']:
                         IndoorUnitTemp = float(jsonResponse['lastKnownState']['LiveAircon']['IndoorUnitTemp'])
+                        IndoorUnitTemp = round(IndoorUnitTemp,3)
                     if 'OutdoorUnit' in jsonResponse['lastKnownState']['LiveAircon']:
                         if 'AmbTemp' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             OutdoorUnitTemp = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['AmbTemp']
+                            OutdoorUnitTemp = round(OutdoorUnitTemp,3)
                         if 'CompPower' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             CompPower = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['CompPower']
                         if 'CompRunningPWM' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             CompRunningPWM = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['CompRunningPWM']
                         if 'CompSpeed' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             CompSpeed = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['CompSpeed']
+                            CompSpeed = round(CompSpeed,3)
                         if 'FanSpeed' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             outdoorFanSpeed = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['FanSpeed']
+
                     if 'CompressorMode' in jsonResponse['lastKnownState']['LiveAircon']:
                         CompressorMode = jsonResponse['lastKnownState']['LiveAircon']['CompressorMode']
                     self.logger.debug("Live Air Con Summary:----")
@@ -748,15 +752,12 @@ class Plugin(indigo.PluginBase):
         if deviceID =="":
             self.logger.info("Details not correct.")
             return
-
         zonedevice = indigo.devices[int(deviceID)]
         accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
         mainDevicehvacMode = maindevice.states['hvacOperationMode']
-
         if mainDevicehvacMode == indigo.kHvacMode.Off:
             self.logger.info("Main Que Device is Off.  System needs to be running to open/close Zones.")
             return
-
         if accessToken == "error" or serialNo=="error":
             self.logger.info("Unable to complete accessToken or Serial No issue")
             return
@@ -843,6 +844,15 @@ class Plugin(indigo.PluginBase):
             if "hvacOperationMode" in maindevice.states:
                 if onoroff == "OFF":
                     maindevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
+            ## Update status as zones open now, devices on etc.
+            self.sleep(2)
+            accessToken = maindevice.pluginProps['accessToken']
+            serialNo = maindevice.pluginProps['serialNo']
+            if accessToken == "" or serialNo == "":
+                self.logger.debug("Probably expired token.  Running Access Token Recreate")
+                self.checkMainDevices()
+            else:
+                zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
         return
 
     ########################################
@@ -894,7 +904,7 @@ class Plugin(indigo.PluginBase):
     # Process action request from Indigo Server to change main thermostat's main mode.
     def _handleChangeHvacModeAction(self, dev, newHvacMode):
         # Command hardware module (dev) to change the thermostat mode here:
-        # ** IMPLEMENT ME **
+
         sendSuccess = False  # Set to False if it failed.
         actionStr = _lookupActionStrFromHvacMode(newHvacMode)
 
@@ -949,6 +959,16 @@ class Plugin(indigo.PluginBase):
             # And then tell the Indigo Server to update the state.
             if "hvacOperationMode" in dev.states:
                 dev.updateStateOnServer("hvacOperationMode", newHvacMode)
+            self.sleep(2)
+            self.logger.debug(u'Updating System Status given Command sent')
+            accessToken = maindevice.pluginProps['accessToken']
+            serialNo = maindevice.pluginProps['serialNo']
+            if accessToken == "" or serialNo == "":
+                self.logger.debug("Probably expired token.  Running Access Token Recreate")
+                self.checkMainDevices()
+            else:
+                zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
+
         else:
             # Else log failure but do NOT update state on Indigo Server.
             indigo.server.log(u"send \"%s\" mode change to %s failed" % (dev.name, actionStr), isError=True)

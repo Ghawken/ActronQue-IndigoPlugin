@@ -82,8 +82,8 @@
             </State>
                      <State id="fanSpeed">
                 <ValueType>String</ValueType>
-                <TriggerLabel>Fan Speed Setting</TriggerLabel>
-                <ControlPageLabel>Fan Speed Setting</ControlPageLabel>
+                <TriggerLabel>Indoor Fan Speed</TriggerLabel>
+                <ControlPageLabel>Indoor Fan Speed </ControlPageLabel>
             </State>
 		   <State id="serialNumber">
                 <ValueType>String</ValueType>
@@ -108,7 +108,7 @@
 		 		 <State id="indoorFanRPM">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Indoor Fan RPM</TriggerLabel>
-			 <ControlPageLabel>Panel Reported Firmware</ControlPageLabel>
+			 <ControlPageLabel>Indoor Fan RPM</ControlPageLabel>
             </State>
 		 		 <State id="indoorFanPWM">
                 <ValueType>Number</ValueType>
