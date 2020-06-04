@@ -1,4 +1,8 @@
-0.1.0
+0.1.2
+Only add Humidity to average humdity if >0
+
+
+0.1.1
 
 Round Numbers
 Update Status after each command

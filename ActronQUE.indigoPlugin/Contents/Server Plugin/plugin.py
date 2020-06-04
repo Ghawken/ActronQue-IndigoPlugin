@@ -511,7 +511,9 @@ class Plugin(indigo.PluginBase):
                                     zoneOpen = True
 
                                 listzonetemps.append(livetemp)
-                                listzonehumidity.append(livehumidity)
+                                if livehumidity > 0:
+                                    listzonehumidity.append(livehumidity)
+                                    
                                 zoneStatelist =[
                                     {'key': 'canOperate', 'value': canoperate},
                                     {'key': 'currentTemp', 'value': livetemp},
