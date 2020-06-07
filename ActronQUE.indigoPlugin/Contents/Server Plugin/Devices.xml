@@ -195,10 +195,10 @@
                 <TriggerLabel>Zone is Open or Closed (True or False)</TriggerLabel>
                 <ControlPageLabel>Zone is Open of Closed(True or False)</ControlPageLabel>
             </State>
-            <State id="currentHumidity">
+            <State id="zonePercentageOpen">
                 <ValueType>Number</ValueType>
-                <TriggerLabel>Current Humidity</TriggerLabel>
-                <ControlPageLabel>Current Humidity</ControlPageLabel>
+                <TriggerLabel>Zone Percent Open</TriggerLabel>
+                <ControlPageLabel>Zone Percent Open</ControlPageLabel>
             </State>
             <State id="zoneName">
                 <ValueType>String</ValueType>

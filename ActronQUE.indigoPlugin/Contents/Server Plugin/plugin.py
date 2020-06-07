@@ -317,6 +317,7 @@ class Plugin(indigo.PluginBase):
                 zonedev = indigo.device.create(address=deviceName, deviceTypeId='queZone', name=deviceName,  protocol=indigo.kProtocol.Plugin, folder=folderId)
                 zonedev.updateStateOnServer(key="zoneName", value=zones)
                 zonedev.updateStateOnServer(key="zoneNumber", value=x)
+                zonedev.updateStateOnServer(key="deviceMasterController", value=devId)
 
         except:
             self.logger.exception(u'Caught Exception creating Que Zone Devices')
@@ -361,6 +362,7 @@ class Plugin(indigo.PluginBase):
             CompRunningPWM= float(0)
             CompSpeed = float(0)
             outdoorFanSpeed = float(0)
+            main_humidity = float(0)
             CompressorMode =""
             FanMode = ""
             WorkingMode = ""
@@ -400,7 +402,6 @@ class Plugin(indigo.PluginBase):
                             CompSpeed = round(CompSpeed,3)
                         if 'FanSpeed' in jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']:
                             outdoorFanSpeed = jsonResponse['lastKnownState']['LiveAircon']['OutdoorUnit']['FanSpeed']
-
                     if 'CompressorMode' in jsonResponse['lastKnownState']['LiveAircon']:
                         CompressorMode = jsonResponse['lastKnownState']['LiveAircon']['CompressorMode']
                     self.logger.debug("Live Air Con Summary:----")
@@ -423,6 +424,12 @@ class Plugin(indigo.PluginBase):
                     if 'isOn' in jsonResponse['lastKnownState']['UserAirconSettings']:
                         isACturnedOn = jsonResponse['lastKnownState']['UserAirconSettings']['isOn']
                         self.logger.debug(u"acTurnedOn:" + unicode(isACturnedOn))
+   #0.1.3 Add MasterInfo Data
+                if 'MasterInfo' in jsonResponse['lastKnownState']:
+                    if 'RemoteHumidity_pc' in jsonResponse['lastKnownState']['MasterInfo']:
+                        if serialNo.upper() in jsonResponse['lastKnownState']['MasterInfo']['RemoteHumidity_pc']:
+                            main_humidity = jsonResponse['lastKnownState']['MasterInfo']['RemoteHumidity_pc'][serialNo.upper()]
+
 
                 if bool(isACturnedOn):
                     ## AC is on, may or may not be running
@@ -453,10 +460,14 @@ class Plugin(indigo.PluginBase):
 
                         for dev in indigo.devices.itervalues('self.queZone'):
                             # go through all devices, and compare to 8 zones returned.
-                            if dev.states["zoneName"] == jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['NV_Title']:
+                            if int(dev.states["deviceMasterController"]) != int(device.id):
+                                self.logger.debug("This Device has a new/different master Controller skipping")
+                                continue  ## skip, next zone device
 
+                            if int(dev.states["zoneNumber"])-1 == int(x):
+                            #if dev.states["zoneName"] == jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['NV_Title']:
                                 canoperate = False
-                                livehumidity = float(0)
+                                #livehumidity = float(0)
                                 liveTemphys = float(0)
                                 livetemp = float(0)
                                 tempsetpointcool = float(0)
@@ -469,8 +480,8 @@ class Plugin(indigo.PluginBase):
 
                                 if 'CanOperate' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     canoperate = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['CanOperate']
-                                if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
-                                    livehumidity = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveHumidity_pc']
+                               # if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
+                               #     livehumidity = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveHumidity_pc']
                                 if 'LiveTemp_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     livetemp = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveTemp_oC']
                                 if 'LiveTempHysteresis_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
@@ -507,20 +518,22 @@ class Plugin(indigo.PluginBase):
 
                                 if int(ZonePosition) ==0:
                                     zoneOpen = False
+                                    percentageOpen = 0
                                 else:
                                     zoneOpen = True
+                                    percentageOpen = int(ZonePosition)*5
 
                                 listzonetemps.append(livetemp)
-                                if livehumidity > 0:
-                                    listzonehumidity.append(livehumidity)
-                                    
+                                #if livehumidity > 0:
+                                #    listzonehumidity.append(livehumidity)
+
                                 zoneStatelist =[
                                     {'key': 'canOperate', 'value': canoperate},
                                     {'key': 'currentTemp', 'value': livetemp},
                                     {'key': 'temperatureInput1', 'value': livetemp},
-                                    {'key': 'humidityInput1', 'value': livehumidity},
+                                   # {'key': 'humidityInput1', 'value': livehumidity},
                                     {'key': 'currentTempHystersis', 'value': liveTemphys},
-                                    {'key': 'currentHumidity', 'value': livehumidity},
+                                    {'key': 'zonePercentageOpen', 'value': percentageOpen},
                                     {'key': 'sensorBattery', 'value': sensorbattery},
                                     {'key': 'sensorId', 'value': sensorid},
                                     {'key': 'zoneisEnabled', 'value': listzonesopen[x]},
@@ -534,8 +547,6 @@ class Plugin(indigo.PluginBase):
                                 ]
                                 dev.updateStatesOnServer(zoneStatelist)
 
-
-
             averageTemp = 0
             averageHum = 0
             tempInputsAll = []
@@ -543,8 +554,9 @@ class Plugin(indigo.PluginBase):
             if len(listzonetemps) > 1:
                 tempInputsAll = str(','.join(map(str, listzonetemps)) )
                 averageTemp = reduce(lambda a,b:a+b, listzonetemps) / len(listzonetemps)
-                humdInputsAll = str(','.join(map(str, listzonehumidity)))
-                averageHum = reduce(lambda a, b: a + b, listzonehumidity) / len(listzonehumidity)
+           # if len(listzonehumidity) >1:
+           #     humdInputsAll = str(','.join(map(str, listzonehumidity)))
+          #      averageHum = reduce(lambda a, b: a + b, listzonehumidity) / len(listzonehumidity)
 
             self.logger.debug(unicode(tempInputsAll))
             stateList = [
@@ -564,7 +576,7 @@ class Plugin(indigo.PluginBase):
                 {'key': 'outdoorUnitCompMode', 'value': CompressorMode},
                 {'key': 'hvacOperationMode', 'value': MainStatus},
                 {'key': 'temperatureInput1', 'value': averageTemp},
-                {'key': 'humidityInput1', 'value': averageHum},
+                {'key': 'humidityInput1', 'value': main_humidity},
                 {'key': 'fanSpeed', 'value': FanMode},
                 {'key': 'outdoorUnitFanSpeed', 'value': outdoorFanSpeed},
             ]
@@ -1070,16 +1082,18 @@ class Plugin(indigo.PluginBase):
     def deviceStartComm(self, device):
         self.logger.debug(u"deviceStartComm called for " + device.name)
         device.stateListOrDisplayStateIdChanged()
+        newProps = device.pluginProps
         if device.deviceTypeId == 'ActronQueMain':
             device.updateStateOnServer('deviceIsOnline', value=True)
-        newProps = device.pluginProps
-        newProps["NumHumidityInputs"]=1
+            newProps["NumHumidityInputs"] = 1
+
+
         newProps["ShowCoolHeatEquipmentStateUI"]= True
         newProps["SupportsHvacFanMode"] = False
         if device.deviceTypeId == "queZone":
             newProps["SupportsCoolSetpoint"] = False
             newProps["SupportsHeatSetpoint"] = False
-
+            newProps["NumHumidityInputs"] = 0
         device.replacePluginPropsOnServer(newProps)
 ##
     def generateLabels(self, device,valuesDict, somethingunused):
