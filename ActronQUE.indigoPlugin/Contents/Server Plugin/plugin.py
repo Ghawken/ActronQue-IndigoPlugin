@@ -586,7 +586,24 @@ class Plugin(indigo.PluginBase):
             device.updateStatesOnServer(stateList)
             return zonenames
 
-
+        except requests.exceptions.ReadTimeout,e:
+            self.logger.debug("ReadTimeout with get System Actron Air:"+unicode(e))
+            return
+        except requests.exceptions.Timeout,e:
+            self.logger.debug("Timeout with get System Actron Air:"+unicode(e))
+            return
+        except requests.exceptions.ConnectionError,e:
+            self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e))
+            return
+        except requests.exceptions.ConnectTimeout,e:
+            self.logger.debug("Connect Timeout with get System Actron Air:"+unicode(e))
+            return
+        except requests.exceptions.HTTPError,e:
+            self.logger.debug("HttpError with get System Actron Air:"+unicode(e))
+            return
+        except requests.exceptions.SSLError,e:
+            self.logger.debug("SSL with get System Actron Air:"+unicode(e))
+            return
 
         except Exception, e:
             self.logger.exception("Error getting System Status : " + repr(e))

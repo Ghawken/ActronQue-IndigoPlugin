@@ -1,3 +1,6 @@
+0.1.5
+Better handling of requests errors/timeouts
+
 0.1.4
 Bug fix for isActurnedon if fails communication.
 Upload percentage Circle for Zone devices - showing percentage open
