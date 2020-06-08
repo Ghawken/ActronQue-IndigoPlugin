@@ -1,3 +1,7 @@
+0.1.4
+Bug fix for isActurnedon if fails communication.
+Upload percentage Circle for Zone devices - showing percentage open
+
 0.1.3
 Delete zone humdities - dont exist just copys of main device humidity!
 Add percentage of Zone Open.

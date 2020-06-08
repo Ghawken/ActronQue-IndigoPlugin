@@ -430,25 +430,27 @@ class Plugin(indigo.PluginBase):
                         if serialNo.upper() in jsonResponse['lastKnownState']['MasterInfo']['RemoteHumidity_pc']:
                             main_humidity = jsonResponse['lastKnownState']['MasterInfo']['RemoteHumidity_pc'][serialNo.upper()]
 
-
-                if bool(isACturnedOn):
-                    ## AC is on, may or may not be running
-                    self.logger.debug("ACturnedOn True:")
-                    # userACmode OFF,HEAT,COOL,AUTO - however OFF just means not running now
-                    if userACmode == "AUTO":
-                        MainStatus = indigo.kHvacMode.HeatCool
-                    elif userACmode == "HEAT":
-                        MainStatus = indigo.kHvacMode.Heat
-                    elif userACmode == "COOL":
-                        MainStatus = indigo.kHvacMode.Cool
-                    # if CompressorMode == "HEAT":
-                    #     MainStatus = indigo.kHvacMode.Heat
-                    # elif CompressorMode =="COOL" :
-                    #    MainStatus = indigo.kHvacMode.Cool
+                try:
+                    if bool(isACturnedOn):
+                        ## AC is on, may or may not be running
+                        self.logger.debug("ACturnedOn True:")
+                        # userACmode OFF,HEAT,COOL,AUTO - however OFF just means not running now
+                        if userACmode == "AUTO":
+                            MainStatus = indigo.kHvacMode.HeatCool
+                        elif userACmode == "HEAT":
+                            MainStatus = indigo.kHvacMode.Heat
+                        elif userACmode == "COOL":
+                            MainStatus = indigo.kHvacMode.Cool
+                        # if CompressorMode == "HEAT":
+                        #     MainStatus = indigo.kHvacMode.Heat
+                        # elif CompressorMode =="COOL" :
+                        #    MainStatus = indigo.kHvacMode.Cool
+                        else:
+                            MainStatus = indigo.kHvacMode.HeatCool
                     else:
-                        MainStatus = indigo.kHvacMode.HeatCool
-                else:
-                    MainStatus = indigo.kHvacMode.Off
+                        MainStatus = indigo.kHvacMode.Off
+                except UnboundLocalError:
+                    self.logger.debug("isACturnedOn doesn't exit... skipping On/Off/Mode update.")
 
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
                     for x in range (0,8):
