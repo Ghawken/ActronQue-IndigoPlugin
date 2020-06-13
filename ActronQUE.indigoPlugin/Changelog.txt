@@ -1,3 +1,8 @@
+0.1.7
+Add Zone Heat/Set Point Controls, increase/decrease by 0.5 degrees as action group
+Deal with command timeouts, repeats commands x5 times before giving up
+
+
 0.1.5
 Better handling of requests errors/timeouts
 

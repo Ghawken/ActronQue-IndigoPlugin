@@ -216,11 +216,33 @@
                 <TriggerLabel>Zone Number</TriggerLabel>
                 <ControlPageLabel>Zone Number</ControlPageLabel>
             </State>
-                        <State id="zonePosition">
+            <State id="zonePosition">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Zone Position</TriggerLabel>
                 <ControlPageLabel>Zone Position</ControlPageLabel>
             </State>
+
+            <State id="MaxCoolSetpoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>MaxCoolSetpoint</TriggerLabel>
+                <ControlPageLabel>MaxCool Setpoint</ControlPageLabel>
+            </State>
+            <State id="MaxHeatSetpoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>MaxHeat Setpoint</TriggerLabel>
+                <ControlPageLabel>MaxHeat Setpoint</ControlPageLabel>
+            </State>
+            <State id="MinCoolSetpoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>MinCool Setpoint</TriggerLabel>
+                <ControlPageLabel>MinCool Setpoint</ControlPageLabel>
+            </State>
+            <State id="MinHeatSetpoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>MinHeat Setpoint</TriggerLabel>
+                <ControlPageLabel>MinHeat Setpoint</ControlPageLabel>
+            </State>
+
 
           <State id="TempSetPointCool">
                 <ValueType>Number</ValueType>
