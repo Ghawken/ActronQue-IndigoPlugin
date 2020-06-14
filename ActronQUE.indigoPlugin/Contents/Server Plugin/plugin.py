@@ -403,6 +403,7 @@ class Plugin(indigo.PluginBase):
             main_humidity = float(0)
             CompressorMode =""
             FanMode = ""
+            quietMode = ""
             WorkingMode = ""
             SystemSetpoint_Cool = float(0)
             SystemSetpoint_Heat = float(0)
@@ -451,6 +452,8 @@ class Plugin(indigo.PluginBase):
                         WorkingMode = jsonResponse['lastKnownState']['UserAirconSettings']['Mode']
                         userACmode = jsonResponse['lastKnownState']['UserAirconSettings']['Mode']
                         self.logger.debug(u"userACMode:" + unicode(userACmode))
+                    if 'QuietMode' in jsonResponse['lastKnownState']['UserAirconSettings']:
+                        quietMode = jsonResponse['lastKnownState']['UserAirconSettings']['QuietMode']
                     if 'TemperatureSetpoint_Cool_oC' in jsonResponse['lastKnownState']['UserAirconSettings']:
                         SystemSetpoint_Cool = jsonResponse['lastKnownState']['UserAirconSettings']['TemperatureSetpoint_Cool_oC']
                     if 'TemperatureSetpoint_Heat_oC' in jsonResponse['lastKnownState']['UserAirconSettings']:
@@ -635,6 +638,7 @@ class Plugin(indigo.PluginBase):
                 {'key': 'hvacOperationMode', 'value': MainStatus},
                 {'key': 'temperatureInput1', 'value': averageTemp},
                 {'key': 'humidityInput1', 'value': main_humidity},
+                {'key': 'quietMode', 'value': quietMode},
                 {'key': 'fanSpeed', 'value': FanMode},
                 {'key': 'outdoorUnitFanSpeed', 'value': outdoorFanSpeed},
             ]
@@ -1134,6 +1138,55 @@ class Plugin(indigo.PluginBase):
                 zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
         return
 
+    def setQuiet(self, action):
+        self.logger.debug(u"setQuiet Device Called as Action.")
+        onoroff = action.props.get('setting',"OFF")  #add TOGGLE
+        deviceID = action.props.get("deviceID","")
+        sendSuccess= False
+
+        if deviceID =="":
+            self.logger.info("Details not correct.")
+            return
+
+        maindevicegiven = indigo.devices[int(deviceID)]
+        accessToken, serialNo, maindevice = self.returnmainAccessSerial(maindevicegiven)
+      #  mainDevicehvacMode = maindevice.states['hvacOperationMode']
+
+        if accessToken == "error" or serialNo=="error":
+            self.logger.info("Unable to complete accessToken or Serial No issue")
+            return
+
+        crtquietMode = maindevicegiven.states['quietMode']
+        targetquietMode = False
+
+        if onoroff == "ON":
+            targetquietMode = True
+        elif onoroff == "OFF":
+            targetquietMode = False
+        elif onoroff == "TOGGLE":
+            if crtquietMode == True:
+                targetquietMode = False
+            elif crtquietMode == False:
+                targetquietMode = True
+
+        self.logger.info("setQuiet Mode Action called.  Current Mode:"+unicode(crtquietMode)+" and target Mode:"+unicode(targetquietMode))
+
+        if maindevice.deviceTypeId == "ActronQueMain":
+            ## if a zone device needs different command
+            ## probably best to be OFF or anything else
+            if crtquietMode == targetquietMode:
+                self.logger.info("Quiet Mode already set to the target mode.  No command therefore sent.")
+                return
+            else:
+                ## need to turn on and change mode
+                if self.sendCommand(accessToken, serialNo, "UserAirconSettings.QuietMode", bool(targetquietMode), 0):
+                    self.logger.info("Setting Quiet Mode to "+unicode(targetquietMode))
+                    sendSuccess = True
+                    maindevice.updateStateOnServer("quietMode", bool(targetquietMode))
+                else:
+                    self.logger.info("Error completing command, aborted")
+                    return
+        return
     ########################################
     def _refreshStatesFromHardware(self, dev):
         self.logger.debug("refreshing States from Hardware")
@@ -1258,9 +1311,9 @@ class Plugin(indigo.PluginBase):
     def _handleChangeFanModeAction(self, dev, newFanMode):
         # Command hardware module (dev) to change the fan mode here:
         # ** IMPLEMENT ME **
-        sendSuccess = True  # Set to False if it failed.
+        sendSuccess = False  # Set to False if it failed.
 
-        self.logger.info("Change Fan Mode unsupported currently")
+        self.logger.info("Change Fan Mode unsupported currently.  Use Action Group to change.")
         return
 
     def _handleChangeHvacModeActionError(self,dev,error):

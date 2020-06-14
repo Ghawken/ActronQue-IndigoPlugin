@@ -85,6 +85,11 @@
                 <TriggerLabel>Indoor Fan Speed</TriggerLabel>
                 <ControlPageLabel>Indoor Fan Speed </ControlPageLabel>
             </State>
+         <State id="quietMode">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Quiet Mode Setting</TriggerLabel>
+                <ControlPageLabel>Quiet Mode Setting</ControlPageLabel>
+            </State>
 		   <State id="serialNumber">
                 <ValueType>String</ValueType>
                 <TriggerLabel>Serial Number</TriggerLabel>

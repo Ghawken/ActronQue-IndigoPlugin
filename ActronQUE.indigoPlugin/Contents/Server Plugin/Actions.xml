@@ -58,6 +58,27 @@
 
         </ConfigUI>
     </Action>
+   <Action id="setQuiet">
+        <Name>Turn Quiet Mode On/Off/Toggle</Name>
+        <CallbackMethod>setQuiet</CallbackMethod>
+        <ConfigUI>
+           	<Field id="setting" type="menu" defaultValue="OFF">
+				<Label>Quiet Mode Setting:</Label>
+				<List>
+					<Option value="OFF">Off</Option>
+					<Option value="ON">On</Option>
+                    <Option value="TOGGLE">Toggle</Option>
+				</List>
+            </Field>
+			<Field id="deviceID" type="menu">
+                <Label>Select Device:</Label>
+                <List class="indigo.devices" filter="self.ActronQueMain"/>
+            </Field>
+
+        </ConfigUI>
+    </Action>
+
+
  <Action id="setZoneHeatsetpoint">
         <Name>set Zone Heat Point</Name>
         <CallbackMethod>setZoneHeatPoint</CallbackMethod>
