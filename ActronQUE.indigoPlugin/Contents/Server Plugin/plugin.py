@@ -1205,7 +1205,8 @@ class Plugin(indigo.PluginBase):
                     return
             elif newHvacMode == indigo.kHvacMode.Off: ## need to turn AC off
                 if self.sendCommand(accessToken, serialNo, "UserAirconSettings.isOn", False, 0):
-                    self.logger.info("Turning off AC System")
+                    self.logger.info("Turning off AC System. ")
+                    return
                 else:
                     self.logger.info("Error completing command, aborted")
                     return
