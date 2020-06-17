@@ -1,3 +1,6 @@
+0.2.0
+Fix for versioning
+
 0.1.9
 Fix for timeout during serialNo acquiring
 (would continue without serialNo until restarted)
