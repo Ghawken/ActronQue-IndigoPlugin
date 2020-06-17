@@ -209,6 +209,9 @@ class Plugin(indigo.PluginBase):
                         if accessToken == "" or accessToken == None:
                             self.logger.info("Try again later, once Main device setup and connected")
                             self.logger.error("Probably expired token")
+                        elif serialNo == None or serialNo == "":
+                            self.logger.debug("Blank Serial No.  Rechecking for Serial")
+                            serialNo = self.getACsystems(accessToken)
                         else:
                             zonenames = self.getSystemStatus(dev, accessToken, serialNo)
                 self.sleep(60)
@@ -284,10 +287,16 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug(jsonResponse['_embedded']['ac-system'][0])
                             serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
                             self.logger.debug("Serial Number:"+unicode(serialNumber))
+                            self.connected = True
                             return serialNumber
             else:
                 self.logger.error(unicode(r.text))
                 return
+
+        except requests.ReadTimeout,e:
+            self.logger.info("ReadTimeout connecting to Actron.  Retrying.")
+            self.logger.debug("ReadTimeout connecting to Actron. Retrying."+unicode(e))
+
 
         except Exception, e:
             self.logger.exception("Error getting AC systems : " + repr(e))
@@ -367,6 +376,9 @@ class Plugin(indigo.PluginBase):
             if accessToken == None or accessToken=="":
                 self.logger.debug("Access token nil.  Aborting")
                 return
+            if serialNo == None or serialNo=="":
+                self.logger.debug("Blank Serial No.  Rechecking for Serial")
+                return
 
             self.logger.debug("Getting System Status for System Serial No %s" % serialNo)
             # self.logger.info("Connecting to %s" % address)
@@ -375,14 +387,12 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=10)
+            r = requests.get(url, headers=headers, timeout=15)
             if r.status_code != 200:
                 self.logger.info("Error Message from get System Status")
                 self.logger.debug(unicode(r.text))
                 return
-
 # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
-
             self.logger.debug(unicode(r.text))
             jsonResponse = r.json()
             listzonetemps = []
@@ -717,7 +727,7 @@ class Plugin(indigo.PluginBase):
             if accessToken=="":
                 self.logger.info("No Access Token received?  Ending.")
                 return ""
-
+            self.connected = True
             return accessToken
 
         except Exception, e:
@@ -1218,7 +1228,7 @@ class Plugin(indigo.PluginBase):
             if accessToken == "" or serialNo == "":
                 self.logger.debug("Try again later, once Main device setup and connected")
                 self.logger.debug("Probably expired token.  Running Access Token Recreate")
-                return "error","error"
+                return "error","error","error"
             else:
                 return accessToken,serialNo,dev
 
@@ -1229,7 +1239,7 @@ class Plugin(indigo.PluginBase):
             if accessToken == "" or serialNo == "":
                 self.logger.debug("Try again later, once Main device setup and connected")
                 self.logger.debug("Probably expired token.  Running Access Token Recreate")
-                return "error","error"
+                return "error","error","error"
             else:
                 return accessToken, serialNo, maindevice
 
@@ -1242,7 +1252,7 @@ class Plugin(indigo.PluginBase):
 
         accessToken, serialNo, maindevice = self.returnmainAccessSerial(dev)
         if accessToken == "error" or serialNo=="error":
-            self.logger.info("Unable to complete accessToken or Serial No issue")
+            self.logger.info("Unable to complete accessToken or Serial Number issue")
             return
 
         mainDevicehvacMode = maindevice.states['hvacOperationMode']

@@ -1,3 +1,7 @@
+0.1.9
+Fix for timeout during serialNo acquiring
+(would continue without serialNo until restarted)
+
 0.1.8
 Turn off without setting mode.
 
