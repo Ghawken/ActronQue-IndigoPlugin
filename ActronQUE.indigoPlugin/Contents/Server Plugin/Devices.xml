@@ -29,9 +29,27 @@
           <Field id="label2b2" type="label" fontSize="small" fontColor="black">
     <Label>Press the above to Generate Zone Devices within Same Directory as Que Main Device</Label>
           </Field>
-      <Field id="sep224" type="separator"/>
+      <Field id="sep22a4" type="separator"/>
+        <Field id="systemcheckonly" type="checkbox" tooltip="Limit Internet Use.">
+        <Label/>
+        <Description>Update less Frequently:</Description>
+    </Field>
+        <Field id="label2ba2" type="label" fontSize="small" fontColor="black">
+    <Label>
+        If enabled will query Actron API every 5 minutes or so only.
+        If disabled will use latestevents API and update continuously.
+        Enabled: Less internet use, less frequent information updates
+        Disabled: More internet use (still should be tiny), continuously updated
+    </Label>
+          </Field>
 
         <Field id="accessToken"
+				   type="textfield"
+				   tooltip=""
+				   default=""
+        hidden="true" >
+			</Field>
+                <Field id="latesteventid"
 				   type="textfield"
 				   tooltip=""
 				   default=""
@@ -114,6 +132,11 @@
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Indoor Fan RPM</TriggerLabel>
 			 <ControlPageLabel>Indoor Fan RPM</ControlPageLabel>
+            </State>
+         		 		 <State id="compressorCapacity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Compressor Capacity</TriggerLabel>
+			 <ControlPageLabel>Compressor Capacity</ControlPageLabel>
             </State>
 		 		 <State id="indoorFanPWM">
                 <ValueType>Number</ValueType>

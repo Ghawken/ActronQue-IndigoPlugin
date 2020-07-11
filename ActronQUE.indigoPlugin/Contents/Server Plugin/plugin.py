@@ -15,6 +15,7 @@ import logging
 import sys
 import requests
 from collections import namedtuple
+from collections import OrderedDict
 import json
 
 
@@ -90,7 +91,7 @@ class Plugin(indigo.PluginBase):
         self.debug3 = self.pluginPrefs.get('debug3', False)
         self.debug4 = self.pluginPrefs.get('debug4',False)
         self.debug5 = self.pluginPrefs.get('debug5', False)
-
+        self.latestevents = {}  ## dict devid and lastest event id
         # main device to be updated as needed
         self.paneldate = ""
         self.battery = float(0)
@@ -194,31 +195,46 @@ class Plugin(indigo.PluginBase):
 
     def runConcurrentThread(self):
 
-        updatemaindevice = t.time() + 60*60*70
+        startingUp = True
+        updateAccessToken = t.time() + 60*60*70
+        getfullSystemStatus = t.time()  ## on startup always pull full system
+        getlatestEvents = t.time() +5
+
+          ## use dicts for this internally as will be fast moving and no need to report to Indigo
+        ## Also move to pulling everything 10 seconds or so, if full-system-broadcast - send to system, if status - send to status
 
         try:
             # check once on statup
             # also check zones
             self.checkMainDevices()  #
             while True:
-                self.sleep(5)
+
                 for dev in indigo.devices.itervalues(filter="self"):
                     if dev.deviceTypeId == "ActronQueMain":
                         accessToken = dev.pluginProps['accessToken']
                         serialNo = dev.pluginProps['serialNo']
+                        systemcheckonly = dev.pluginProps.get('systemcheckonly', False)
                         if accessToken == "" or accessToken == None:
                             self.logger.info("Try again later, once Main device setup and connected")
                             self.logger.error("Probably expired token")
+                            continue
                         elif serialNo == None or serialNo == "":
                             self.logger.debug("Blank Serial No.  Rechecking for Serial")
                             serialNo = self.getACsystems(accessToken)
-                        else:
-                            zonenames = self.getSystemStatus(dev, accessToken, serialNo)
-                self.sleep(60)
-                if t.time() > updatemaindevice:
+                        if systemcheckonly:  ## don't use status updates..
+                            if t.time()> getfullSystemStatus:
+                                zonenames = self.getSystemStatus(dev, accessToken, serialNo)
+                                getfullSystemStatus = t.time()+300
+                        else:  ## disabled use latest Events..
+                            if t.time() > getlatestEvents:
+                                self.getlatestEvents(dev, accessToken,serialNo)
+                                getlatestEvents = t.time() +4
+                self.sleep(4)
+                if t.time() > updateAccessToken:
                     self.logger.info("Updating Access Token as 24 hours has passed")
                     self.checkMainDevices()
-                    updatemaindevice = t.time() + 60 * 60 * 24
+                    updateAccessToken = t.time() + 60 * 60 * 24
+                startingUp = False
 
         except self.StopThread:
             self.debugLog(u'Restarting/or error. Stopping thread.')
@@ -369,6 +385,434 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(unicode(valuesDict))
         return
 
+    def getlatestEvents(self, device, accessToken, serialNo):
+        try:
+            if accessToken == None or accessToken == "":
+                self.logger.debug("Access token nil.  Aborting")
+                return
+            if serialNo == None or serialNo == "":
+                self.logger.debug("Blank Serial No.  Rechecking for Serial")
+                return
+
+            skippingparsing = False
+            lasteventid = self.latestevents.get(device.id,"A")
+            # will give KeyError if blank, use get to avoid, use A pulls all
+
+          #  if self.debug4:
+         #       self.logger.debug("Getting Latest Events for System Serial No %s" % serialNo)
+         #       self.logger.debug(u"LastEventID: " + unicode(lasteventid))
+            # self.logger.info("Connecting to %s" % address)
+           # url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
+
+            if lasteventid=="A":
+                url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
+                # don't parse this info - just re-do the system state already received.
+                # skip.
+                skippingparsing=True
+            else:
+                url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/newer?serial=' + str(serialNo)+ '&newerThanEventId='+str(lasteventid)
+
+
+           #     self.logger.debug(unicode(url))
+            headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
+                       'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
+                       'Authorization': 'Bearer ' + accessToken}
+            # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code != 200:
+                self.logger.info("Error Message from get Latest Events")
+                self.logger.debug(unicode(r.text))
+                return
+            # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
+            #self.logger.debug(unicode(r.text))
+
+            jsonResponse = json.loads(r.text, object_pairs_hook=OrderedDict)
+
+           # jsonResponse = r.json(object_pairs_hook=OrderedDict)
+            if "events" in jsonResponse:
+                eventslist = jsonResponse['events']
+                if len(eventslist)>0:
+                    self.latestevents[device.id]= eventslist[0]['id']
+                    #self.logger.error(unicode(eventslist[0]))
+
+            if skippingparsing:
+                self.logger.info("First Run of Latest Events: Skipping updating once.")
+                return
+
+            for events in reversed(eventslist):
+                self.logger.debug(u'event:'+unicode(events))
+                if events['type']=='full-status-broadcast':
+                    if self.debug4:
+                        self.logger.debug("Full Status BroadCase Found")
+                    self.parseFullStatusBroadcast(device, serialNo, events)
+                elif events['type']=="status-change-broadcast":
+                    #if self.debug4:
+                        #self.logger.debug("Status Change Broadcast")
+                    self.parsestatusChangeBroadcast(device,serialNo,events['data'])
+                    #self.logger.error(unicode(events))
+                #self.logger.debug(u'event id:'+events['id'])
+
+            return
+        except:
+            self.logger.exception("Error in get latest System Events")
+
+
+    def parsestatusChangeBroadcast(self,device, serialNo,fullstatus):
+       # if self.debug4:
+        #    self.logger.debug('parsing status change broadcast')
+        try:
+            for events in fullstatus:
+                if self.debug4:
+                    self.logger.debug("event:"+unicode(events)+ " result:"+unicode(fullstatus[events]))
+                results = fullstatus[events]
+                if 'EnabledZones' in events:
+                    zonenumber = int(events.split('[', 1)[1].split(']')[0])
+                    for zones in indigo.devices.itervalues('self.queZone'):
+                        if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
+                            if self.debug4:
+                                self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode( events) + u" and data:" + unicode(results))
+                            if str(results)=="True":
+                                zones.updateStateOnServer("zoneisEnabled", True)
+                                currentMode = device.states['hvacOperationMode']
+                                zones.updateStateOnServer('hvacOperationMode', currentMode)
+                            elif str(results)=="False":
+                                zones.updateStateOnServer("zoneisEnabled", False)
+                                zones.updateStateOnServer('hvacOperationMode',indigo.kHvacMode.Off)
+
+                elif 'RemoteZoneInfo' in events:  #zone info update
+                    ## parse the Zone Number
+                    zonenumber = int(events.split('[', 1)[1].split(']')[0])
+                    #self.logger.error(u"ZoneNumber split to be:"+unicode(zonenumber))
+
+                    if 'ZonePosition' in events:
+                        if int(results) == 0:
+                            zoneOpen = False
+                            percentageOpen = 0
+                        else:
+                            zoneOpen = True
+                            percentageOpen = int(results) * 5
+                        for zones in indigo.devices.itervalues('self.queZone'):
+                            if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
+                                if self.debug4:
+                                    self.logger.debug(u"Updating Zone:"+unicode(zonenumber)+" with new Event:"+unicode(events)+u" and data:"+unicode(results))
+                                zones.updateStateOnServer("zonePosition", int(results))
+                                zones.updateStateOnServer("zonePercentageOpen", percentageOpen)
+                                zones.updateStateOnServer("zoneisOpen", zoneOpen)
+                    if 'LiveTemp_oC' in events:
+                        for zones in indigo.devices.itervalues('self.queZone'):
+                            if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
+                                if self.debug4:
+                                    self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                                zones.updateStateOnServer("temperatureInput1", float(results))
+                elif 'MasterInfo' in events:  ## system data
+                    if 'LiveOutdoorTemp_oC' in events:
+                        OutdoorUnitTemp = float(results)
+                        OutdoorUnitTemp = round(OutdoorUnitTemp, 3)
+                        if self.debug4:
+                            self.logger.debug(u"Updating Master Device with new Event:" + unicode(  events) + u" and data:" + unicode(results))
+                        device.updateStateOnServer("outdoorUnitTemp", OutdoorUnitTemp)
+                    if 'LiveHumidity_pc' in events:
+                        LiveHumidity = float(results)
+                        LiveHumidity = round(LiveHumidity, 3)
+                        if self.debug4:
+                            self.logger.debug(
+                                u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(
+                                    results))
+                        device.updateStateOnServer("humidityInput1", LiveHumidity)
+                elif 'LiveAircon' in events:  ## system data as well
+                    if 'CompressorCapacity' in events:
+                        compCapacity = float(results)
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        device.updateStateOnServer("compressorCapacity", compCapacity)
+        except:
+            self.logger.debug(u"Exception in parseStateChange Broadcast")
+            self.logger.exception(u'this one:')
+
+
+## currently the full status broadcast information from Actron is completely wrong
+    # temp/zones etc.. wrong
+    # not sure what is what
+    # obviously don't use for now, instead get full system status
+    def parseFullStatusBroadcast(self, device, serialNo, fullstatus):
+        if self.debug4:
+            self.logger.debug("Parsing Full Status Broadcast")
+
+            #self.logger.info(unicode(fullstatus))
+
+        jsonResponse =fullstatus
+        listzonetemps = []
+        listzonehumidity = []
+        listzonesopen = [False, False, False, False, False, False, False, False]
+        indoorModel = ""
+        alertCF = False
+        alertDRED = False
+        alertDefrosting = False
+        fanPWM = float(0)
+        fanRPM = float(0)
+        IndoorUnitTemp = float(0)
+        OutdoorUnitTemp = float(0)
+        CompPower = float(0)
+        CompRunningPWM = float(0)
+        CompSpeed = float(0)
+        outdoorFanSpeed = float(0)
+        main_humidity = float(0)
+        compCapacity = float(0)
+        CompressorMode = ""
+        FanMode = ""
+        quietMode = ""
+        WorkingMode = ""
+        SystemSetpoint_Cool = float(0)
+        SystemSetpoint_Heat = float(0)
+        MainStatus = indigo.kHvacMode.Off
+        zonenames = ""
+
+        if 'data' in jsonResponse:
+            if "<" + serialNo.upper() + ">" in jsonResponse['data']:
+                self.logger.debug(unicode(jsonResponse['data']["<" + serialNo.upper() + ">"]))
+            if "AirconSystem" in jsonResponse['data']:
+                if 'IndoorUnit' in jsonResponse['data']['AirconSystem']:
+                    indoorModel = jsonResponse['data']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
+            if 'Alerts' in jsonResponse['data']:
+                alertCF = jsonResponse['data']['Alerts']['CleanFilter']
+                alertDRED = jsonResponse['data']['Alerts']['DRED']
+                alertDefrosting = jsonResponse['data']['Alerts']['Defrosting']
+            if 'LiveAircon' in jsonResponse['data']:
+                if 'FanPWM' in jsonResponse['data']['LiveAircon']:
+                    fanPWM = jsonResponse['data']['LiveAircon']['FanPWM']
+                if 'CompressorCapacity' in jsonResponse['data']['LiveAircon']:
+                    compCapacity = jsonResponse['data']['LiveAircon']['CompressorCapacity']
+                if 'FanRPM' in jsonResponse['data']['LiveAircon']:
+                    fanRPM = jsonResponse['data']['LiveAircon']['FanRPM']
+                if 'IndoorUnitTemp' in jsonResponse['data']['LiveAircon']:
+                    IndoorUnitTemp = float(jsonResponse['data']['LiveAircon']['IndoorUnitTemp'])
+                    IndoorUnitTemp = round(IndoorUnitTemp, 3)
+                if 'OutdoorUnit' in jsonResponse['data']['LiveAircon']:
+                    if 'AmbTemp' in jsonResponse['data']['LiveAircon']['OutdoorUnit']:
+                        OutdoorUnitTemp = jsonResponse['data']['LiveAircon']['OutdoorUnit']['AmbTemp']
+                        OutdoorUnitTemp = round(OutdoorUnitTemp, 3)
+                    if 'CompPower' in jsonResponse['data']['LiveAircon']['OutdoorUnit']:
+                        CompPower = jsonResponse['data']['LiveAircon']['OutdoorUnit']['CompPower']
+                    if 'CompRunningPWM' in jsonResponse['data']['LiveAircon']['OutdoorUnit']:
+                        CompRunningPWM = jsonResponse['data']['LiveAircon']['OutdoorUnit']['CompRunningPWM']
+                    if 'CompSpeed' in jsonResponse['data']['LiveAircon']['OutdoorUnit']:
+                        CompSpeed = jsonResponse['data']['LiveAircon']['OutdoorUnit']['CompSpeed']
+                        CompSpeed = round(CompSpeed, 3)
+                    if 'FanSpeed' in jsonResponse['data']['LiveAircon']['OutdoorUnit']:
+                        outdoorFanSpeed = jsonResponse['data']['LiveAircon']['OutdoorUnit']['FanSpeed']
+                if 'CompressorMode' in jsonResponse['data']['LiveAircon']:
+                    CompressorMode = jsonResponse['data']['LiveAircon']['CompressorMode']
+                self.logger.debug("Live Air Con Summary:----")
+                self.logger.debug(jsonResponse['data']['LiveAircon'])
+            if 'UserAirconSettings' in jsonResponse['data']:
+                if 'FanMode' in jsonResponse['data']['UserAirconSettings']:
+                    FanMode = jsonResponse['data']['UserAirconSettings']['FanMode']
+                if 'Mode' in jsonResponse['data']['UserAirconSettings']:
+                    WorkingMode = jsonResponse['data']['UserAirconSettings']['Mode']
+                    userACmode = jsonResponse['data']['UserAirconSettings']['Mode']
+                    self.logger.debug(u"userACMode:" + unicode(userACmode))
+                if 'QuietMode' in jsonResponse['data']['UserAirconSettings']:
+                    quietMode = jsonResponse['data']['UserAirconSettings']['QuietMode']
+                if 'TemperatureSetpoint_Cool_oC' in jsonResponse['data']['UserAirconSettings']:
+                    SystemSetpoint_Cool = jsonResponse['data']['UserAirconSettings'][
+                        'TemperatureSetpoint_Cool_oC']
+                if 'TemperatureSetpoint_Heat_oC' in jsonResponse['data']['UserAirconSettings']:
+                    SystemSetpoint_Heat = jsonResponse['data']['UserAirconSettings'][
+                        'TemperatureSetpoint_Heat_oC']
+                if 'EnabledZones' in jsonResponse['data']['UserAirconSettings']:
+                    # self.logger.error(unicode(jsonResponse['data']['UserAirconSettings']['EnabledZones']))
+                    listzonesopen = jsonResponse['data']['UserAirconSettings']['EnabledZones']
+                    self.logger.debug(u"List of Zone Status:" + unicode(listzonesopen))
+                if 'isOn' in jsonResponse['data']['UserAirconSettings']:
+                    isACturnedOn = jsonResponse['data']['UserAirconSettings']['isOn']
+                    self.logger.debug(u"acTurnedOn:" + unicode(isACturnedOn))
+            # 0.1.3 Add MasterInfo Data
+            if 'MasterInfo' in jsonResponse['data']:
+                if 'RemoteHumidity_pc' in jsonResponse['data']['MasterInfo']:
+                    if serialNo.upper() in jsonResponse['data']['MasterInfo']['RemoteHumidity_pc']:
+                        main_humidity = jsonResponse['data']['MasterInfo']['RemoteHumidity_pc'][
+                            serialNo.upper()]
+
+            try:
+                if bool(isACturnedOn):
+                    ## AC is on, may or may not be running
+                    self.logger.debug("ACturnedOn True:")
+                    # userACmode OFF,HEAT,COOL,AUTO - however OFF just means not running now
+                    if userACmode == "AUTO":
+                        MainStatus = indigo.kHvacMode.HeatCool
+                    elif userACmode == "HEAT":
+                        MainStatus = indigo.kHvacMode.Heat
+                    elif userACmode == "COOL":
+                        MainStatus = indigo.kHvacMode.Cool
+                    # if CompressorMode == "HEAT":
+                    #     MainStatus = indigo.kHvacMode.Heat
+                    # elif CompressorMode =="COOL" :
+                    #    MainStatus = indigo.kHvacMode.Cool
+                    else:
+                        MainStatus = indigo.kHvacMode.HeatCool
+                else:
+                    MainStatus = indigo.kHvacMode.Off
+            except UnboundLocalError:
+                self.logger.debug("isACturnedOn doesn't exit... skipping On/Off/Mode update.")
+
+            if 'RemoteZoneInfo' in jsonResponse['data']:
+                for x in range(0, 8):
+                    ## go through all zones
+                    self.logger.debug("Zone Number:" + unicode(x))
+                    self.logger.debug(jsonResponse['data']['RemoteZoneInfo'][x])
+                    if 'NV_Title' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                        zonenames = zonenames + jsonResponse['data']['RemoteZoneInfo'][x]['NV_Title'] + ","
+                    self.logger.debug(unicode(zonenames))
+
+                    for dev in indigo.devices.itervalues('self.queZone'):
+                        # go through all devices, and compare to 8 zones returned.
+                        if int(dev.states["deviceMasterController"]) != int(device.id):
+                            self.logger.debug("This Device has a new/different master Controller skipping")
+                            continue  ## skip, next zone device
+
+                        if int(dev.states["zoneNumber"]) - 1 == int(x):
+                            # if dev.states["zoneName"] == jsonResponse['data']['RemoteZoneInfo'][x]['NV_Title']:
+                            canoperate = False
+                            # livehumidity = float(0)
+                            liveTemphys = float(0)
+                            livetemp = float(0)
+                            tempsetpointcool = float(0)
+                            tempsetpointheat = float(0)
+                            ZonePosition = int(0)
+                            sensorbattery = int(0)
+
+                            maxcoolsp = int(0)
+                            maxheatsp = int(0)
+                            mincoolsp = int(0)
+                            minheatsp = int(0)
+
+                            sensorid = ""
+                            ZoneStatus = indigo.kHvacMode.Off  ## Cool, HeatCool, Heat, Off
+                            zoneOpen = False
+                            if 'MaxCoolSetpoint' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                maxcoolsp = jsonResponse['data']['RemoteZoneInfo'][x]['MaxCoolSetpoint']
+                            if 'MaxHeatSetpoint' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                maxheatsp = jsonResponse['data']['RemoteZoneInfo'][x]['MaxHeatSetpoint']
+                            if 'MinCoolSetpoint' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                mincoolsp = jsonResponse['data']['RemoteZoneInfo'][x]['MinCoolSetpoint']
+                            if 'MinHeatSetpoint' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                minheatsp = jsonResponse['data']['RemoteZoneInfo'][x]['MinHeatSetpoint']
+                            if 'CanOperate' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                canoperate = jsonResponse['data']['RemoteZoneInfo'][x]['CanOperate']
+                            # if 'LiveHumidity_pc' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                            #     livehumidity = jsonResponse['data']['RemoteZoneInfo'][x]['LiveHumidity_pc']
+                            if 'LiveTemp_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                livetemp = jsonResponse['data']['RemoteZoneInfo'][x]['LiveTemp_oC']
+                            if 'LiveTempHysteresis_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                liveTemphys = jsonResponse['data']['RemoteZoneInfo'][x][
+                                    'LiveTempHysteresis_oC']
+                            if 'TemperatureSetpoint_Cool_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                tempsetpointcool = jsonResponse['data']['RemoteZoneInfo'][x][
+                                    'TemperatureSetpoint_Cool_oC']
+                            if 'TemperatureSetpoint_Heat_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                tempsetpointheat = jsonResponse['data']['RemoteZoneInfo'][x][
+                                    'TemperatureSetpoint_Heat_oC']
+                            if 'Sensors' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                # self.logger.error(jsonResponse['data']['RemoteZoneInfo'][x]['Sensors'])
+                                for key, value in jsonResponse['data']['RemoteZoneInfo'][x][
+                                    'Sensors'].items():
+                                    sensorid = key
+                                if 'Battery_pc' in jsonResponse['data']['RemoteZoneInfo'][x]['Sensors'][key]:
+                                    sensorbattery = jsonResponse['data']['RemoteZoneInfo'][x]['Sensors'][key][
+                                        'Battery_pc']
+                            # correct - as when zoneposition is 0 the zone is turned off, but! zone may in need be enabled
+                            # so not corrrect
+                            # saver to user the enabled zone to set Mode.off and report Zoneposition for use
+                            if 'ZonePosition' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                ZonePosition = jsonResponse['data']['RemoteZoneInfo'][x]['ZonePosition']
+
+                            if listzonesopen[x] == True:
+                                if bool(isACturnedOn):  ## AC Turned On may not be running
+                                    ZoneStatus = MainStatus
+                                #             if CompressorMode=="HEAT":
+                                #                 ZoneStatus = indigo.kHvacMode.Heat
+                                #             elif CompressorMode == "COOL":
+                                #                 ZoneStatus = indigo.kHvacMode.Cool
+                                #             else:
+                                #                 ZoneStatus = indigo.kHvacMode.HeatCool  ## not running so don'tknow
+                                else:
+                                    ZoneStatus = indigo.kHvacMode.Off
+                            else:
+                                ZoneStatus = indigo.kHvacMode.Off
+
+                            if int(ZonePosition) == 0:
+                                zoneOpen = False
+                                percentageOpen = 0
+                            else:
+                                zoneOpen = True
+                                percentageOpen = int(ZonePosition) * 5
+
+                            listzonetemps.append(livetemp)
+                            # if livehumidity > 0:
+                            #    listzonehumidity.append(livehumidity)
+
+                            zoneStatelist = [
+                                {'key': 'canOperate', 'value': canoperate},
+                                {'key': 'currentTemp', 'value': livetemp},
+                                {'key': 'temperatureInput1', 'value': livetemp},
+                                # {'key': 'humidityInput1', 'value': livehumidity},
+                                {'key': 'currentTempHystersis', 'value': liveTemphys},
+                                {'key': 'zonePercentageOpen', 'value': percentageOpen},
+                                {'key': 'sensorBattery', 'value': sensorbattery},
+                                {'key': 'sensorId', 'value': sensorid},
+                                {'key': 'zoneisEnabled', 'value': listzonesopen[x]},
+                                {'key': 'zoneisOpen', 'value': zoneOpen},
+                                {'key': 'hvacOperationMode', 'value': ZoneStatus},
+                                {'key': 'TempSetPointCool', 'value': tempsetpointcool},
+                                {'key': 'TempSetPointHeat', 'value': tempsetpointheat},
+                                {'key': 'zonePosition', 'value': ZonePosition},
+                                {'key': 'MinHeatSetpoint', 'value': minheatsp},
+                                {'key': 'MinCoolSetpoint', 'value': mincoolsp},
+                                {'key': 'MaxHeatSetpoint', 'value': maxheatsp},
+                                {'key': 'MaxCoolSetpoint', 'value': maxcoolsp},
+                                {'key': 'deviceMasterController', 'value': device.id},
+                                #    {'key': 'setpointHeat', 'value': tempsetpointheat}
+                            ]
+                            dev.updateStatesOnServer(zoneStatelist)
+
+        averageTemp = 0
+        averageHum = 0
+        tempInputsAll = []
+        humdInputAll = []
+        if len(listzonetemps) > 1:
+            tempInputsAll = str(','.join(map(str, listzonetemps)))
+            averageTemp = reduce(lambda a, b: a + b, listzonetemps) / len(listzonetemps)
+        # if len(listzonehumidity) >1:
+        #     humdInputsAll = str(','.join(map(str, listzonehumidity)))
+        #      averageHum = reduce(lambda a, b: a + b, listzonehumidity) / len(listzonehumidity)
+
+        self.logger.debug(unicode(tempInputsAll))
+        stateList = [
+            {'key': 'indoorModel', 'value': indoorModel},
+            {'key': 'setpointHeat', 'value': SystemSetpoint_Heat},
+            {'key': 'setpointCool', 'value': SystemSetpoint_Cool},
+            {'key': 'alertCleanFilter', 'value': alertCF},
+            {'key': 'alertDRED', 'value': alertDRED},
+            {'key': 'alertDefrosting', 'value': alertDefrosting},
+            {'key': 'indoorFanRPM', 'value': fanRPM},
+            {'key': 'indoorFanPWM', 'value': fanPWM},
+            {'key': 'indoorUnitTemp', 'value': IndoorUnitTemp},
+            {'key': 'outdoorUnitTemp', 'value': OutdoorUnitTemp},
+            {'key': 'outdoorUnitPower', 'value': CompPower},
+            {'key': 'outdoorUnitPWM', 'value': CompRunningPWM},
+            {'key': 'outdoorUnitCompSpeed', 'value': CompSpeed},
+            {'key': 'compressorCapacity', 'value': compCapacity},
+            {'key': 'outdoorUnitCompMode', 'value': CompressorMode},
+            {'key': 'hvacOperationMode', 'value': MainStatus},
+            {'key': 'temperatureInput1', 'value': averageTemp},
+            {'key': 'humidityInput1', 'value': main_humidity},
+            {'key': 'quietMode', 'value': quietMode},
+            {'key': 'fanSpeed', 'value': FanMode},
+            {'key': 'outdoorUnitFanSpeed', 'value': outdoorFanSpeed},
+        ]
+
+        device.updateStatesOnServer(stateList)
+        return zonenames
 
     def getSystemStatus(self, device, accessToken, serialNo):
 
@@ -379,7 +823,6 @@ class Plugin(indigo.PluginBase):
             if serialNo == None or serialNo=="":
                 self.logger.debug("Blank Serial No.  Rechecking for Serial")
                 return
-
             self.logger.debug("Getting System Status for System Serial No %s" % serialNo)
             # self.logger.info("Connecting to %s" % address)
             url = 'https://que.actronair.com.au/api/v0/client/ac-systems/status/latest?serial='+str(serialNo)
@@ -411,6 +854,7 @@ class Plugin(indigo.PluginBase):
             CompSpeed = float(0)
             outdoorFanSpeed = float(0)
             main_humidity = float(0)
+            compCapacity = float(0)
             CompressorMode =""
             FanMode = ""
             quietMode = ""
@@ -431,6 +875,8 @@ class Plugin(indigo.PluginBase):
                     alertDRED = jsonResponse['lastKnownState']['Alerts']['DRED']
                     alertDefrosting = jsonResponse['lastKnownState']['Alerts']['Defrosting']
                 if 'LiveAircon' in jsonResponse['lastKnownState']:
+                    if 'CompressorCapacity' in jsonResponse['lastKnownState']['LiveAircon']:
+                        compCapacity = jsonResponse['lastKnownState']['LiveAircon']['CompressorCapacity']
                     if 'FanPWM' in jsonResponse['lastKnownState']['LiveAircon']:
                         fanPWM = jsonResponse['lastKnownState']['LiveAircon']['FanPWM']
                     if 'FanRPM' in jsonResponse['lastKnownState']['LiveAircon']:
@@ -643,6 +1089,7 @@ class Plugin(indigo.PluginBase):
                 {'key': 'outdoorUnitTemp', 'value': OutdoorUnitTemp},
                 {'key': 'outdoorUnitPower', 'value': CompPower},
                 {'key': 'outdoorUnitPWM', 'value': CompRunningPWM},
+                {'key': 'compressorCapacity', 'value': compCapacity},
                 {'key': 'outdoorUnitCompSpeed', 'value': CompSpeed},
                 {'key': 'outdoorUnitCompMode', 'value': CompressorMode},
                 {'key': 'hvacOperationMode', 'value': MainStatus},
@@ -878,7 +1325,7 @@ class Plugin(indigo.PluginBase):
                     self.logger.info("Error completing command, aborted")
             elif zoneonoroff == "OFF":  ## need to turn AC off
                 if self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0):
-                    self.logger.info("Turning off Zone number "+unicode(zoneNumber))
+                    self.logger.info("Turning off Zone number "+unicode(int(zoneNumber)+1))
                     zonedevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
                     sendSuccess = True
                 else:
@@ -886,7 +1333,7 @@ class Plugin(indigo.PluginBase):
             elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off and (zoneonoroff == "OFF" or zoneonoroff=="TOGGLE"):
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
                 if self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0):
-                    self.logger.info("Turning off Zone number "+unicode(zoneNumber))
+                    self.logger.info("Turning off Zone number "+unicode(int(zoneNumber)+1))
                     zonedevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
                     sendSuccess = True
                 else:

@@ -33,7 +33,7 @@
     </Field>
     <Field id="debug4" type="checkbox" tooltip="Enabling will result .">
         <Label/>
-        <Description>Debug 4</Description>
+        <Description>Debug 4: Latest Events</Description>
     </Field>
         <Field id="debug5" type="checkbox" tooltip="Enabling will .">
         <Label/>

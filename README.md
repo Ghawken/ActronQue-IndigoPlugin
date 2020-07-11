@@ -45,7 +45,11 @@ There are two additional action groups to turn a zone on or off
 Some of the control options vary depending whether targetting a zone or main controller.
 Can't change main mode (heat -> cool) via zone for example.  
 
-Early release, but as I am increasingly finding - often just runs without problem for long period so never actually update/change hence the release
+Updates >0.2.1:
 
-Cheers
+Move to using the latest events api, constantly updating as temp/zone positions/etc change
+Can disable with Main Device options if prefer infrequent 5 minutes info updates.
+However I find that I can display all info on a control page and get frustrated with not immediate updates!
+
+
 
