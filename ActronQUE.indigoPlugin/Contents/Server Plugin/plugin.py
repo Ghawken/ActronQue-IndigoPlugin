@@ -418,7 +418,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=20)
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(unicode(r.text))
@@ -440,7 +440,8 @@ class Plugin(indigo.PluginBase):
                 return
 
             for events in reversed(eventslist):
-                self.logger.debug(u'event:'+unicode(events))
+                if self.debug4:
+                    self.logger.debug(u'event:'+unicode(events))
                 if events['type']=='full-status-broadcast':
                     if self.debug4:
                         self.logger.debug("Full Status BroadCase Found")
@@ -457,8 +458,28 @@ class Plugin(indigo.PluginBase):
 
 
             return
-        except:
-            self.logger.exception("Error in get latest System Events")
+        except requests.exceptions.ReadTimeout, e:
+            self.logger.debug("ReadTimeout with get Latest Events from Actron API:" + unicode(e))
+            return
+        except requests.exceptions.Timeout, e:
+            self.logger.debug("Timeout with get Latest Events from Actron API:" + unicode(e))
+            return
+        except requests.exceptions.ConnectionError, e:
+            self.logger.debug("ConnectionError with get Latest Events from Actron API:" + unicode(e))
+            return
+        except requests.exceptions.ConnectTimeout, e:
+            self.logger.debug("Connect Timeout with get Latest Events from Actron API:" + unicode(e))
+            return
+        except requests.exceptions.HTTPError, e:
+            self.logger.debug("HttpError with get Latest Events from Actron API:" + unicode(e))
+            return
+        except requests.exceptions.SSLError, e:
+            self.logger.debug("SSL with get Latest Events from Actron API:" + unicode(e))
+            return
+
+        except Exception, e:
+            self.logger.exception("Error getting Latest Events from Actron API : " + repr(e))
+            self.logger.debug("Error Latest Events from Actron API" + unicode(e.message))
 
 
     def parsestatusChangeBroadcast(self,device, serialNo,fullstatus):
