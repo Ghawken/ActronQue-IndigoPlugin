@@ -451,6 +451,10 @@ class Plugin(indigo.PluginBase):
                     self.parsestatusChangeBroadcast(device,serialNo,events['data'])
                     #self.logger.error(unicode(events))
                 #self.logger.debug(u'event id:'+events['id'])
+                else:
+                    self.logger.error(u"Unknown Event:")
+                    self.logger.error(unicode(events))
+
 
             return
         except:
