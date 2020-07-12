@@ -532,7 +532,7 @@ class Plugin(indigo.PluginBase):
                                 eventactioned = True
                     elif 'LiveTempHysteresis_oC' in events:
                         self.logger.debug(u"Ignored Temp Hystersis Zone report")
-                        eventactioned = TGrue
+                        eventactioned = True
                 elif 'MasterInfo' in events:  ## system data
                     if 'LiveOutdoorTemp_oC' in events:
                         OutdoorUnitTemp = float(results)
