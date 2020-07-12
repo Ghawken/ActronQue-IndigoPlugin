@@ -523,13 +523,16 @@ class Plugin(indigo.PluginBase):
                                 zones.updateStateOnServer("zonePercentageOpen", percentageOpen)
                                 zones.updateStateOnServer("zoneisOpen", zoneOpen)
                                 eventactioned = True
-                    if 'LiveTemp_oC' in events:
+                    elif 'LiveTemp_oC' in events:
                         for zones in indigo.devices.itervalues('self.queZone'):
                             if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
                                 if self.debug4:
                                     self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
                                 zones.updateStateOnServer("temperatureInput1", float(results))
                                 eventactioned = True
+                    elif 'LiveTempHysteresis_oC' in events:
+                        self.logger.debug(u"Ignored Temp Hystersis Zone report")
+                        eventactioned = TGrue
                 elif 'MasterInfo' in events:  ## system data
                     if 'LiveOutdoorTemp_oC' in events:
                         OutdoorUnitTemp = float(results)
@@ -538,7 +541,16 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug(u"Updating Master Device with new Event:" + unicode(  events) + u" and data:" + unicode(results))
                         device.updateStateOnServer("outdoorUnitTemp", OutdoorUnitTemp)
                         eventactioned = True
-                    if 'LiveHumidity_pc' in events:
+                    elif 'LiveTemp_oC' in events:
+                        LiveTemp = float(results)
+                        LiveTemp = round(LiveTemp, 3)
+                        if self.debug4:
+                            self.logger.debug(
+                                u"Skipping this event, as Plugin reports average across all zones Master Device with new Event:" + unicode(events) + u" and data:" + unicode(
+                                    results))
+                        #device.updateStateOnServer("outdoorUnitTemp", LiveTemp)
+                        eventactioned = True
+                    elif 'LiveHumidity_pc' in events:
                         LiveHumidity = float(results)
                         LiveHumidity = round(LiveHumidity, 3)
                         if self.debug4:
@@ -557,6 +569,7 @@ class Plugin(indigo.PluginBase):
                 if eventactioned == False:
                     self.logger.error(u"Event but not recognised:")
                     self.logger.error(unicode(events))
+                    self.logger.error(unicode(fullstatus))
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")
             self.logger.exception(u'this one:')
