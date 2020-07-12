@@ -452,9 +452,7 @@ class Plugin(indigo.PluginBase):
                     self.parsestatusChangeBroadcast(device,serialNo,events['data'])
                     #self.logger.error(unicode(events))
                 #self.logger.debug(u'event id:'+events['id'])
-                else:
-                    self.logger.error(u"Unknown Event:")
-                    self.logger.error(unicode(events))
+
 
 
             return
@@ -487,6 +485,7 @@ class Plugin(indigo.PluginBase):
         #    self.logger.debug('parsing status change broadcast')
         try:
             for events in fullstatus:
+                eventactioned = False
                 if self.debug4:
                     self.logger.debug("event:"+unicode(events)+ " result:"+unicode(fullstatus[events]))
                 results = fullstatus[events]
@@ -500,15 +499,15 @@ class Plugin(indigo.PluginBase):
                                 zones.updateStateOnServer("zoneisEnabled", True)
                                 currentMode = device.states['hvacOperationMode']
                                 zones.updateStateOnServer('hvacOperationMode', currentMode)
+                                eventactioned = True
                             elif str(results)=="False":
                                 zones.updateStateOnServer("zoneisEnabled", False)
                                 zones.updateStateOnServer('hvacOperationMode',indigo.kHvacMode.Off)
-
+                                eventactioned = True
                 elif 'RemoteZoneInfo' in events:  #zone info update
                     ## parse the Zone Number
                     zonenumber = int(events.split('[', 1)[1].split(']')[0])
                     #self.logger.error(u"ZoneNumber split to be:"+unicode(zonenumber))
-
                     if 'ZonePosition' in events:
                         if int(results) == 0:
                             zoneOpen = False
@@ -523,12 +522,14 @@ class Plugin(indigo.PluginBase):
                                 zones.updateStateOnServer("zonePosition", int(results))
                                 zones.updateStateOnServer("zonePercentageOpen", percentageOpen)
                                 zones.updateStateOnServer("zoneisOpen", zoneOpen)
+                                eventactioned = True
                     if 'LiveTemp_oC' in events:
                         for zones in indigo.devices.itervalues('self.queZone'):
                             if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
                                 if self.debug4:
                                     self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
                                 zones.updateStateOnServer("temperatureInput1", float(results))
+                                eventactioned = True
                 elif 'MasterInfo' in events:  ## system data
                     if 'LiveOutdoorTemp_oC' in events:
                         OutdoorUnitTemp = float(results)
@@ -536,6 +537,7 @@ class Plugin(indigo.PluginBase):
                         if self.debug4:
                             self.logger.debug(u"Updating Master Device with new Event:" + unicode(  events) + u" and data:" + unicode(results))
                         device.updateStateOnServer("outdoorUnitTemp", OutdoorUnitTemp)
+                        eventactioned = True
                     if 'LiveHumidity_pc' in events:
                         LiveHumidity = float(results)
                         LiveHumidity = round(LiveHumidity, 3)
@@ -544,12 +546,17 @@ class Plugin(indigo.PluginBase):
                                 u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(
                                     results))
                         device.updateStateOnServer("humidityInput1", LiveHumidity)
+                        eventactioned = True
                 elif 'LiveAircon' in events:  ## system data as well
                     if 'CompressorCapacity' in events:
                         compCapacity = float(results)
                         if self.debug4:
                             self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         device.updateStateOnServer("compressorCapacity", compCapacity)
+                        eventactioned = True
+                if eventactioned == False:
+                    self.logger.error(u"Event but not recognised:")
+                    self.logger.error(unicode(events))
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")
             self.logger.exception(u'this one:')
