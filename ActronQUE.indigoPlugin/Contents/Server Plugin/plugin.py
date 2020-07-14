@@ -80,6 +80,8 @@ class Plugin(indigo.PluginBase):
         self.deviceUpdate = False
         self.devicetobeUpdated =''
 
+        self.latestEventsConnectionError = False
+
         self.ipaddress = self.pluginPrefs.get('ipaddress', '')
         self.port = self.pluginPrefs.get('port', 10000)
         self.ip150password = self.pluginPrefs.get('ip150password', 'paradox')
@@ -226,7 +228,7 @@ class Plugin(indigo.PluginBase):
                                 zonenames = self.getSystemStatus(dev, accessToken, serialNo)
                                 getfullSystemStatus = t.time()+300
                         else:  ## disabled use latest Events..
-                            if t.time() > getlatestEvents:
+                            if t.time() > getlatestEvents and self.latestEventsConnectionError==False:
                                 self.getlatestEvents(dev, accessToken,serialNo)
                                 getlatestEvents = t.time() +4
                 self.sleep(4)
@@ -234,6 +236,11 @@ class Plugin(indigo.PluginBase):
                     self.logger.info("Updating Access Token as 24 hours has passed")
                     self.checkMainDevices()
                     updateAccessToken = t.time() + 60 * 60 * 24
+
+                if self.latestEventsConnectionError:
+                    ## obvious connection error
+                    getlatestEvents = t.time() +30
+
                 startingUp = False
 
         except self.StopThread:
@@ -418,7 +425,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=20)
+            r = requests.get(url, headers=headers, timeout=15)
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(unicode(r.text))
@@ -452,33 +459,36 @@ class Plugin(indigo.PluginBase):
                     self.parsestatusChangeBroadcast(device,serialNo,events['data'])
                     #self.logger.error(unicode(events))
                 #self.logger.debug(u'event id:'+events['id'])
-
-
-
             return
         except requests.exceptions.ReadTimeout, e:
             self.logger.debug("ReadTimeout with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
         except requests.exceptions.Timeout, e:
             self.logger.debug("Timeout with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
         except requests.exceptions.ConnectionError, e:
             self.logger.debug("ConnectionError with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
         except requests.exceptions.ConnectTimeout, e:
             self.logger.debug("Connect Timeout with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
         except requests.exceptions.HTTPError, e:
             self.logger.debug("HttpError with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
         except requests.exceptions.SSLError, e:
             self.logger.debug("SSL with get Latest Events from Actron API:" + unicode(e))
+            self.latestEventsConnectionError = True
             return
 
         except Exception, e:
             self.logger.exception("Error getting Latest Events from Actron API : " + repr(e))
             self.logger.debug("Error Latest Events from Actron API" + unicode(e.message))
-
+            self.latestEventsConnectionError = True
 
     def parsestatusChangeBroadcast(self,device, serialNo,fullstatus):
        # if self.debug4:
@@ -489,25 +499,20 @@ class Plugin(indigo.PluginBase):
                 if self.debug4:
                     self.logger.debug("event:"+unicode(events)+ " result:"+unicode(fullstatus[events]))
                 results = fullstatus[events]
-                if 'EnabledZones' in events:
-                    zonenumber = int(events.split('[', 1)[1].split(']')[0])
-                    for zones in indigo.devices.itervalues('self.queZone'):
-                        if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
-                            if self.debug4:
-                                self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode( events) + u" and data:" + unicode(results))
-                            if str(results)=="True":
-                                zones.updateStateOnServer("zoneisEnabled", True)
-                                currentMode = device.states['hvacOperationMode']
-                                zones.updateStateOnServer('hvacOperationMode', currentMode)
-                                eventactioned = True
-                            elif str(results)=="False":
-                                zones.updateStateOnServer("zoneisEnabled", False)
-                                zones.updateStateOnServer('hvacOperationMode',indigo.kHvacMode.Off)
-                                eventactioned = True
+
+                if 'SystemStatus_Local.LastScreenTouch_UTC' in events:
+                    if self.debug4:
+                        self.logger.debug(u"Ignoring Last Screen Touch UTC update")
+                    eventactioned = True
+                ## Zone Info
                 elif 'RemoteZoneInfo' in events:  #zone info update
                     ## parse the Zone Number
                     zonenumber = int(events.split('[', 1)[1].split(']')[0])
                     #self.logger.error(u"ZoneNumber split to be:"+unicode(zonenumber))
+                    for zones in indigo.devices.itervalues('self.queZone'):
+                        # iter through all zones finding correct Zone.  Do it once here.  use Found zone everywhere down stream.
+                        if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
+                            foundzone = zones
                     if 'ZonePosition' in events:
                         if int(results) == 0:
                             zoneOpen = False
@@ -515,24 +520,53 @@ class Plugin(indigo.PluginBase):
                         else:
                             zoneOpen = True
                             percentageOpen = int(results) * 5
-                        for zones in indigo.devices.itervalues('self.queZone'):
-                            if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
-                                if self.debug4:
-                                    self.logger.debug(u"Updating Zone:"+unicode(zonenumber)+" with new Event:"+unicode(events)+u" and data:"+unicode(results))
-                                zones.updateStateOnServer("zonePosition", int(results))
-                                zones.updateStateOnServer("zonePercentageOpen", percentageOpen)
-                                zones.updateStateOnServer("zoneisOpen", zoneOpen)
-                                eventactioned = True
-                    elif 'LiveTemp_oC' in events:
-                        for zones in indigo.devices.itervalues('self.queZone'):
-                            if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
-                                if self.debug4:
-                                    self.logger.debug(u"Updating Zone:" + unicode(zonenumber) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                                zones.updateStateOnServer("temperatureInput1", float(results))
-                                eventactioned = True
-                    elif 'LiveTempHysteresis_oC' in events:
-                        self.logger.debug(u"Ignored Temp Hystersis Zone report")
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:" + unicode(foundzone.states['zoneName']) +" with new Event:"+unicode(events)+u" and data:"+unicode(results))
+                        foundzone.updateStateOnServer("zonePosition", int(results))
+                        foundzone.updateStateOnServer("zonePercentageOpen", percentageOpen)
+                        foundzone.updateStateOnServer("zoneisOpen", zoneOpen)
                         eventactioned = True
+                    elif 'MinHeatSetpoint' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("MinHeatSetpoint", int(results))
+                        eventactioned = True
+                    elif 'MinCoolSetpoint' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("MinCoolSetpoint", int(results))
+                        eventactioned = True
+                    elif 'MaxHeatSetpoint' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results) )
+                        foundzone.updateStateOnServer("MaxHeatSetpoint", int(results))
+                        eventactioned = True
+                    elif 'MaxCoolSetpoint' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("MaxCoolSetpoint", int(results))
+                        eventactioned = True
+                    elif 'TemperatureSetpoint_Cool_oC' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("TempSetPointCool", int(results))
+                        eventactioned = True
+                    elif 'TemperatureSetpoint_Heat_oC' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:" + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("TempSetPointHeat", int(results))
+                        eventactioned = True
+                    elif 'LiveTemp_oC' in events:
+                        if self.debug4:
+                            self.logger.debug( u"Updating Zone:" + unicode(foundzone.states['zoneName']) + u" with new Event:" + unicode( events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("temperatureInput1", float(results))
+                        eventactioned = True
+                    elif 'LiveTempHysteresis_oC' in events:
+                        if self.debug4:
+                            self.logger.debug( u"Updating Zone:" + unicode(foundzone.states['zoneName']) + u" with new Event:" + unicode( events) + u" and data:" + unicode(results))
+                        foundzone.updateStateOnServer("currentTempHystersis", float(results))
+                        eventactioned = True
+                ## System Data
                 elif 'MasterInfo' in events:  ## system data
                     if 'LiveOutdoorTemp_oC' in events:
                         OutdoorUnitTemp = float(results)
@@ -559,6 +593,15 @@ class Plugin(indigo.PluginBase):
                                     results))
                         device.updateStateOnServer("humidityInput1", LiveHumidity)
                         eventactioned = True
+                    elif 'LiveTempHysteresis_oC' in events:
+                        self.logger.debug(u"Ignored Temp Hystersis Zone report")
+                        eventactioned = True
+                    elif 'CloudConnected' in events:
+                        self.logger.debug(u"Ignored reported Cloud Connected event")
+                        eventactioned = True
+                    elif 'CloudReachable' in events:
+                        self.logger.debug(u"Ignored reported Cloud Reachable event")
+                        eventactioned = True
                 elif 'LiveAircon' in events:  ## system data as well
                     if 'CompressorCapacity' in events:
                         compCapacity = float(results)
@@ -566,10 +609,62 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         device.updateStateOnServer("compressorCapacity", compCapacity)
                         eventactioned = True
+                    elif 'CompressorMode' in events:
+                        mode = str(results)
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        if mode == "AUTO":
+                            MainStatus = indigo.kHvacMode.HeatCool
+                        elif mode == "HEAT":
+                            MainStatus = indigo.kHvacMode.Heat
+                        elif mode == "COOL":
+                            MainStatus = indigo.kHvacMode.Cool
+                        else:
+                            MainStatus = indigo.kHvacMode.HeatCool
+                        device.updateStateOnServer("hvacOperationMode", MainStatus)
+                        eventactioned = True
+                elif 'UserAirconSettings' in events: ## system data
+                    if 'QuietMode' in events:
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        if str(results) == "True":
+                            device.updateStateOnServer("quietMode", True)
+                        elif str(results) == "False":
+                            device.updateStateOnServer("quietMode", False)
+                        eventactioned = True
+                    elif 'TemperatureSetpoint_Cool_oC' in events:
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        setpointTemp = float(results)
+                        device.updateStateOnServer("setpointCool", setpointTemp)
+                        eventactioned = True
+                    elif 'TemperatureSetpoint_Heat_oC' in events:
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        setpointTemp = float(results)
+                        device.updateStateOnServer("setpointHeat", setpointTemp)
+                        eventactioned = True
+                    elif 'EnabledZones' in events:
+                        zonenumber = int(events.split('[', 1)[1].split(']')[0])
+                        for zones in indigo.devices.itervalues('self.queZone'):
+                            if int(zones.states["zoneNumber"]) - 1 == int(zonenumber):
+                                if self.debug4:
+                                    self.logger.debug(u"Updating Zone:" + unicode(zones.states['zoneName']) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                                if str(results) == "True":
+                                    zones.updateStateOnServer("zoneisEnabled", True)
+                                    currentMode = device.states['hvacOperationMode']
+                                    zones.updateStateOnServer('hvacOperationMode', currentMode)
+                                    eventactioned = True
+                                elif str(results) == "False":
+                                    zones.updateStateOnServer("zoneisEnabled", False)
+                                    zones.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
+                                    eventactioned = True
+
                 if eventactioned == False:
                     self.logger.error(u"Event but not recognised:")
                     self.logger.error(unicode(events))
                     self.logger.error(unicode(fullstatus))
+
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")
             self.logger.exception(u'this one:')
