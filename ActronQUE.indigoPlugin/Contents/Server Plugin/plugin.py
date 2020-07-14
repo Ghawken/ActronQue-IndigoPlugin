@@ -594,13 +594,16 @@ class Plugin(indigo.PluginBase):
                         device.updateStateOnServer("humidityInput1", LiveHumidity)
                         eventactioned = True
                     elif 'LiveTempHysteresis_oC' in events:
-                        self.logger.debug(u"Ignored Temp Hystersis Zone report")
+                        if self.debug4:
+                            self.logger.debug(u"Ignored Temp Hystersis Zone report")
                         eventactioned = True
                     elif 'CloudConnected' in events:
-                        self.logger.debug(u"Ignored reported Cloud Connected event")
+                        if self.debug4:
+                            self.logger.debug(u"Ignored reported Cloud Connected event")
                         eventactioned = True
                     elif 'CloudReachable' in events:
-                        self.logger.debug(u"Ignored reported Cloud Reachable event")
+                        if self.debug4:
+                            self.logger.debug(u"Ignored reported Cloud Reachable event")
                         eventactioned = True
                 elif 'LiveAircon' in events:  ## system data as well
                     if 'CompressorCapacity' in events:
@@ -661,9 +664,10 @@ class Plugin(indigo.PluginBase):
                                     eventactioned = True
 
                 if eventactioned == False:
-                    self.logger.error(u"Event but not recognised:")
-                    self.logger.error(unicode(events))
-                    self.logger.error(unicode(fullstatus))
+                    if self.debug5:  ## this is unknwon events
+                        self.logger.error(u"Event but not recognised:")
+                        self.logger.error(unicode(events))
+                        self.logger.error(unicode(fullstatus))
 
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")

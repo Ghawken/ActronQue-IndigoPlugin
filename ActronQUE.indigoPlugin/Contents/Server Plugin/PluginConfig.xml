@@ -37,7 +37,7 @@
     </Field>
         <Field id="debug5" type="checkbox" tooltip="Enabling will .">
         <Label/>
-        <Description>Debug 5:Triggers</Description>
+        <Description>Report Unknown Events as Error in Log</Description>
     </Field>
 
     <Field id="showDebugLevel" type="menu" defaultValue="20" tooltip="Controls the amount of debug information written to the log.">
