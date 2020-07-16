@@ -200,7 +200,7 @@ class Plugin(indigo.PluginBase):
         startingUp = True
         updateAccessToken = t.time() + 60*60*70
         getfullSystemStatus = t.time()  ## on startup always pull full system
-        getlatestEvents = t.time() +5
+        getlatestEventsTime = t.time() +5
 
           ## use dicts for this internally as will be fast moving and no need to report to Indigo
         ## Also move to pulling everything 10 seconds or so, if full-system-broadcast - send to system, if status - send to status
@@ -222,14 +222,15 @@ class Plugin(indigo.PluginBase):
                         elif serialNo == None or serialNo == "":
                             self.logger.debug("Blank Serial No.  Rechecking for Serial")
                             serialNo = self.getACsystems(accessToken)
-                        if systemcheckonly:  ## don't use status updates..
+
+                        if systemcheckonly :  ## don't use status updates..
                             if t.time()> getfullSystemStatus:
                                 zonenames = self.getSystemStatus(dev, accessToken, serialNo)
-                                getfullSystemStatus = t.time()+300
+                                getfullSystemStatus = t.time()+ 300
                         else:  ## disabled use latest Events..
-                            if t.time() > getlatestEvents and self.latestEventsConnectionError==False:
+                            if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False:
                                 self.getlatestEvents(dev, accessToken,serialNo)
-                                getlatestEvents = t.time() +4
+                                getlatestEventsTime = t.time() +4
 
                 self.sleep(4)
                 if t.time() > updateAccessToken:
@@ -239,8 +240,9 @@ class Plugin(indigo.PluginBase):
 
                 if self.latestEventsConnectionError:
                     ## obvious connection error
-                    getlatestEvents = t.time() +30
-                    self.latestEventsConnectionError == False  ## reset connection error here.
+                    self.logger.debug(u"latestEventsConnectionError is True, resetting and trying again")
+                    getlatestEventsTime = t.time() +30
+                    self.latestEventsConnectionError = False  ## reset connection error here.
 
                 startingUp = False
 
@@ -1256,21 +1258,27 @@ class Plugin(indigo.PluginBase):
 
         except requests.exceptions.ReadTimeout,e:
             self.logger.debug("ReadTimeout with get System Actron Air:"+unicode(e))
+            self.sleep(30)
             return
         except requests.exceptions.Timeout,e:
             self.logger.debug("Timeout with get System Actron Air:"+unicode(e))
+            self.sleep(30)
             return
         except requests.exceptions.ConnectionError,e:
-            self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e))
+            self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e)
+            self.sleep(30)
             return
         except requests.exceptions.ConnectTimeout,e:
             self.logger.debug("Connect Timeout with get System Actron Air:"+unicode(e))
+            self.sleep(30)
             return
         except requests.exceptions.HTTPError,e:
             self.logger.debug("HttpError with get System Actron Air:"+unicode(e))
+            self.sleep(30)
             return
         except requests.exceptions.SSLError,e:
             self.logger.debug("SSL with get System Actron Air:"+unicode(e))
+            self.sleep(30)
             return
 
         except Exception, e:
