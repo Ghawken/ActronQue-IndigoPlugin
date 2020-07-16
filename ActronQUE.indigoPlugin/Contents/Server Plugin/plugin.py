@@ -210,7 +210,6 @@ class Plugin(indigo.PluginBase):
             # also check zones
             self.checkMainDevices()  #
             while True:
-
                 for dev in indigo.devices.itervalues(filter="self"):
                     if dev.deviceTypeId == "ActronQueMain":
                         accessToken = dev.pluginProps['accessToken']
@@ -231,6 +230,7 @@ class Plugin(indigo.PluginBase):
                             if t.time() > getlatestEvents and self.latestEventsConnectionError==False:
                                 self.getlatestEvents(dev, accessToken,serialNo)
                                 getlatestEvents = t.time() +4
+
                 self.sleep(4)
                 if t.time() > updateAccessToken:
                     self.logger.info("Updating Access Token as 24 hours has passed")
@@ -647,6 +647,12 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         setpointTemp = float(results)
                         device.updateStateOnServer("setpointHeat", setpointTemp)
+                        eventactioned = True
+                    elif 'FanMode' in events:
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        fanMode = str(results)
+                        device.updateStateOnServer("fanSpeed", fanMode)
                         eventactioned = True
                     elif 'EnabledZones' in events:
                         zonenumber = int(events.split('[', 1)[1].split(']')[0])
