@@ -1265,7 +1265,7 @@ class Plugin(indigo.PluginBase):
             self.sleep(30)
             return
         except requests.exceptions.ConnectionError,e:
-            self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e)
+            self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e))
             self.sleep(30)
             return
         except requests.exceptions.ConnectTimeout,e:
