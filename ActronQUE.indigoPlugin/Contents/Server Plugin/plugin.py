@@ -673,10 +673,10 @@ class Plugin(indigo.PluginBase):
                                     eventactioned = True
 
                 if eventactioned == False:
-                    if self.debug5:  ## this is unknwon events
-                        self.logger.error(u"Event but not recognised:")
-                        self.logger.error(unicode(events))
-                        self.logger.error(unicode(fullstatus))
+                    if self.debug5:  ## this is unknown events
+                        self.logger.debug(u"Event but not recognised:")
+                        self.logger.debug(unicode(events))
+                        self.logger.debug(unicode(fullstatus))
 
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")
