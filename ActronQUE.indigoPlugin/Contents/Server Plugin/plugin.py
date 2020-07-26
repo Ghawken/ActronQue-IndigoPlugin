@@ -432,6 +432,11 @@ class Plugin(indigo.PluginBase):
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(unicode(r.text))
+                if 'Authorization has been denied' in r.text:
+                    self.logger.info("Failed authenication for Events, likely expired, or multiple log ins.")
+                    self.logger.info("Regenerating Token for access.")
+                    self.sleep(3)
+                    self.checkMainDevices()
                 return
             # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
             #self.logger.debug(unicode(r.text))
@@ -548,6 +553,14 @@ class Plugin(indigo.PluginBase):
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         foundzone.updateStateOnServer("MaxCoolSetpoint", int(results))
+                        eventactioned = True
+                    elif 'CanOperate' in events:
+                        if self.debug4:
+                            self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
+                        if str(results) == "True":
+                            foundzone.updateStateOnServer("canOperate", True)
+                        elif str(results) == "False":
+                            foundzone.updateStateOnServer("canOperate", False)
                         eventactioned = True
                     elif 'TemperatureSetpoint_Cool_oC' in events:
                         if self.debug4:
