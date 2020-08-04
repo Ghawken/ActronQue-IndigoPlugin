@@ -241,7 +241,7 @@ class Plugin(indigo.PluginBase):
                 if self.latestEventsConnectionError:
                     ## obvious connection error
                     self.logger.debug(u"latestEventsConnectionError is True, resetting and trying again")
-                    getlatestEventsTime = t.time() +30
+                    getlatestEventsTime = t.time() +180
                     self.latestEventsConnectionError = False  ## reset connection error here.
 
                 startingUp = False
