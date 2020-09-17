@@ -95,14 +95,36 @@
                  <Label>Press to Update Temps</Label><Title>Press to Update Temps</Title>
 				<CallbackMethod>updateTemps</CallbackMethod>
 	        </Field>
-
             <Field id="tempoptions" type="menu" rows="11">
 					<Label>Heat Set Point Temperature:</Label>
 					<List class="self" filter="" method="returnHeatSetPointList" dynamicReload="true"/>
             </Field>
-
         </ConfigUI>
     </Action>
+ <Action id="setZoneCoolsetpoint">
+        <Name>set Zone Cool Point</Name>
+        <CallbackMethod>setZoneCoolPoint</CallbackMethod>
+        <ConfigUI>
+            <Field id="deviceID" type="menu">
+                <Label>Select Zone:</Label>
+                <List class="indigo.devices" filter="self.queZone" dynamicReload="true"/>
+            </Field>
+
+             <Field id="setTemp"
+				   type="button"
+				   tooltip="Click on to Update Temp Options"  >
+
+                 <Label>Press to Update Temps</Label><Title>Press to Update Temps</Title>
+				<CallbackMethod>updateTemps</CallbackMethod>
+	        </Field>
+            <Field id="tempoptions" type="menu" rows="11">
+					<Label>Heat Set Point Temperature:</Label>
+					<List class="self" filter="" method="returnCoolSetPointList" dynamicReload="true"/>
+            </Field>
+        </ConfigUI>
+    </Action>
+
+
  <Action id="increaseZoneHeatPoint">
         <Name>Increase Zone Heat Set Point</Name>
         <CallbackMethod>increaseZoneHeatPoint</CallbackMethod>

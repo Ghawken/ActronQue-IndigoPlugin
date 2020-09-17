@@ -194,6 +194,31 @@ class Plugin(indigo.PluginBase):
 
         return endArray
 
+    def returnCoolSetPointList(self, filter='', valuesDict=None, typeId="", targetId=0):
+        endArray = []
+
+        self.logger.debug(unicode(valuesDict))
+
+        try:
+            deviceid = valuesDict.get('deviceID',0)
+            if deviceid != 0:
+                zonedevice = indigo.devices[int(deviceid)]
+                maxheatsp = float(zonedevice.states["MaxCoolSetpoint"])
+                minheatsp = float(zonedevice.states["MinCoolSetpoint"])
+
+                self.logger.debug("Using device "+unicode(deviceid)+ " and maxcoolsp:"+unicode(maxheatsp)+" and mincoolsp:"+unicode(minheatsp))
+
+                setpoint = float(minheatsp)
+                while (setpoint != maxheatsp):
+                    endArray.append((setpoint, setpoint) )
+                    setpoint = setpoint + 0.5
+                ## and finally add max
+                endArray.append((maxheatsp, maxheatsp))
+        except:
+            self.logger.exception("in zone temp list creation")
+
+
+        return endArray
 
     def runConcurrentThread(self):
 
@@ -1669,6 +1694,40 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.exception("Caught Exception in decrease Zone Cool set Point")
 
+    def setZoneCoolPoint(self, action):
+        self.logger.debug(u"setZoneCoolsetpoint Called as Action.")
+        settemp = action.props.get('tempoptions', "")  # add TOGGLE
+        deviceID = action.props.get("deviceID", "")
+
+        if deviceID == "" or settemp=="" :
+            self.logger.info("Action details not correct.")
+            return
+        zonedevice = indigo.devices[int(deviceID)]
+        accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
+
+        mainDevicehvacMode = maindevice.states['hvacOperationMode']
+        if accessToken == "error" or serialNo == "error":
+            self.logger.info("Unable to complete accessToken or Serial No issue")
+            return
+        if zonedevice.deviceTypeId == "queZone":
+            ## if a zone device needs different command
+            ## probably best to be OFF or anything else
+            zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
+            if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off:
+                ## need to turn on Zone
+                self.logger.info("Zone is disabled/off currently, cannot set SetPoint temperature")
+                return
+            elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off:
+                self.logger.debug("Checking: Zone appears on:")
+                ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
+                if self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(settemp),0):
+                    sendSuccess = True
+                else:
+                    self.logger.info("Error completing command, aborted")
+        if sendSuccess:
+            self.logger.info("Cool SetPoint of Zone "+unicode(int(zoneNumber+1)) + " updated to "+settemp+" degrees")
+
+        return
     def setZoneHeatPoint(self, action):
         self.logger.debug(u"setZoneHeatsetpoint Called as Action.")
         settemp = action.props.get('tempoptions', "")  # add TOGGLE
