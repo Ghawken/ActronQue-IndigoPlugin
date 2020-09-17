@@ -84,6 +84,7 @@ class Plugin(indigo.PluginBase):
                                  datefmt='%Y-%m-%d %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
 
+        self.sendingCommand = False
         self.que = Queue()
         self.connected = False
         self.deviceUpdate = False
@@ -262,7 +263,7 @@ class Plugin(indigo.PluginBase):
                                 zonenames = self.getSystemStatus(dev, accessToken, serialNo)
                                 getfullSystemStatus = t.time()+ 300
                         else:  ## disabled use latest Events..
-                            if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False:
+                            if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
                                 self.getlatestEvents(dev, accessToken,serialNo)
                                 getlatestEventsTime = t.time() +4
 
@@ -277,7 +278,7 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(u"latestEventsConnectionError is True, resetting and trying again")
                     getlatestEventsTime = t.time() +180
                     self.latestEventsConnectionError = False  ## reset connection error here.
-
+                    self.sendingCommand= False
                 startingUp = False
 
         except self.StopThread:
@@ -2090,8 +2091,10 @@ class Plugin(indigo.PluginBase):
         while True:
 
             try:
+                self.sleep(1)
                 item = self.que.get()   # blocks here until another que items
                 ## blocks here until next item
+                self.sendingCommand = True
                 commandaccessToken = item.commandaccessToken
                 commandSerialNo = item.commandSerialNo
                 commandtype = item.commandtype
@@ -2105,7 +2108,7 @@ class Plugin(indigo.PluginBase):
 
                     if commandrepeats >= 5:
                         self.logger.info('Command failed after multiple repeats. Aborting.')
-                        return False
+                        continue
 
                     # self.logger.info("Connecting to %s" % address)
                     url = 'https://que.actronair.com.au/api/v0/client/ac-systems/cmds/send?serial=' + str(commandSerialNo)
@@ -2154,7 +2157,7 @@ class Plugin(indigo.PluginBase):
                                 self.logger.info("Command ack successfully by QUE. Returning successful completion.")
 
 
-
+                    self.sendingCommand = False
                     self.que.task_done()
 
                 except requests.Timeout:
