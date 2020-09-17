@@ -571,22 +571,22 @@ class Plugin(indigo.PluginBase):
                     elif 'MinHeatSetpoint' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                        foundzone.updateStateOnServer("MinHeatSetpoint", int(results))
+                        foundzone.updateStateOnServer("MinHeatSetpoint", float(results))
                         eventactioned = True
                     elif 'MinCoolSetpoint' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                        foundzone.updateStateOnServer("MinCoolSetpoint", int(results))
+                        foundzone.updateStateOnServer("MinCoolSetpoint", float(results))
                         eventactioned = True
                     elif 'MaxHeatSetpoint' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results) )
-                        foundzone.updateStateOnServer("MaxHeatSetpoint", int(results))
+                        foundzone.updateStateOnServer("MaxHeatSetpoint", float(results))
                         eventactioned = True
                     elif 'MaxCoolSetpoint' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                        foundzone.updateStateOnServer("MaxCoolSetpoint", int(results))
+                        foundzone.updateStateOnServer("MaxCoolSetpoint", float(results))
                         eventactioned = True
                     elif 'CanOperate' in events:
                         if self.debug4:
@@ -599,12 +599,12 @@ class Plugin(indigo.PluginBase):
                     elif 'TemperatureSetpoint_Cool_oC' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                        foundzone.updateStateOnServer("TempSetPointCool", int(results))
+                        foundzone.updateStateOnServer("TempSetPointCool", float(results))
                         eventactioned = True
                     elif 'TemperatureSetpoint_Heat_oC' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:" + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
-                        foundzone.updateStateOnServer("TempSetPointHeat", int(results))
+                        foundzone.updateStateOnServer("TempSetPointHeat", float(results))
                         eventactioned = True
                     elif 'LiveTemp_oC' in events:
                         if self.debug4:
