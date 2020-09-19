@@ -118,7 +118,7 @@
 				<CallbackMethod>updateTemps</CallbackMethod>
 	        </Field>
             <Field id="tempoptions" type="menu" rows="11">
-					<Label>Heat Set Point Temperature:</Label>
+					<Label>Cool Set Point Temperature:</Label>
 					<List class="self" filter="" method="returnCoolSetPointList" dynamicReload="true"/>
             </Field>
         </ConfigUI>

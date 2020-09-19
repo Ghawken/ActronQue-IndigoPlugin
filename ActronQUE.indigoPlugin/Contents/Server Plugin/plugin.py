@@ -276,7 +276,7 @@ class Plugin(indigo.PluginBase):
                 if self.latestEventsConnectionError:
                     ## obvious connection error
                     self.logger.debug(u"latestEventsConnectionError is True, resetting and trying again")
-                    getlatestEventsTime = t.time() +180
+                    getlatestEventsTime = t.time() +60
                     self.latestEventsConnectionError = False  ## reset connection error here.
                     self.sendingCommand= False
                 startingUp = False
@@ -463,7 +463,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=10)
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(unicode(r.text))
@@ -601,11 +601,13 @@ class Plugin(indigo.PluginBase):
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:"  + unicode(foundzone.states['zoneName']) + " with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         foundzone.updateStateOnServer("TempSetPointCool", float(results))
+                        foundzone.updateStateOnServer("setpointCool", float(results))
                         eventactioned = True
                     elif 'TemperatureSetpoint_Heat_oC' in events:
                         if self.debug4:
                             self.logger.debug(u"Updating Zone:" + unicode(foundzone.states['zoneName']) +" with new Event:" + unicode(events) + u" and data:" + unicode(results))
                         foundzone.updateStateOnServer("TempSetPointHeat", float(results))
+                        foundzone.updateStateOnServer("setpointHeat", float(results))
                         eventactioned = True
                     elif 'LiveTemp_oC' in events:
                         if self.debug4:
@@ -972,6 +974,8 @@ class Plugin(indigo.PluginBase):
                                 {'key': 'MaxHeatSetpoint', 'value': maxheatsp},
                                 {'key': 'MaxCoolSetpoint', 'value': maxcoolsp},
                                 {'key': 'deviceMasterController', 'value': device.id},
+                                {'key': 'setpointHeat', 'value': tempsetpointheat},
+                                {'key': 'setpointCool', 'value': tempsetpointcool}
                                 #    {'key': 'setpointHeat', 'value': tempsetpointheat}
                             ]
                             dev.updateStatesOnServer(zoneStatelist)
@@ -1261,7 +1265,8 @@ class Plugin(indigo.PluginBase):
                                     {'key': 'MaxHeatSetpoint', 'value': maxheatsp},
                                     {'key': 'MaxCoolSetpoint', 'value': maxcoolsp},
                                     {'key': 'deviceMasterController', 'value': device.id},
-                                #    {'key': 'setpointHeat', 'value': tempsetpointheat}
+                                    {'key': 'setpointHeat', 'value': tempsetpointheat},
+                                    {'key': 'setpointCool', 'value': tempsetpointcool}
                                 ]
                                 dev.updateStatesOnServer(zoneStatelist)
 
@@ -1680,8 +1685,8 @@ class Plugin(indigo.PluginBase):
             zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
             if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off:
                 ## need to turn on Zone
-                self.logger.info("Zone is disabled/off currently, cannot set SetPoint temperature")
-                return
+                self.logger.info("Zone is disabled/off currently, not sure can set SetPoint temperature.. happy to try...")
+                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(settemp),0)
             elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off:
                 self.logger.debug("Checking: Zone appears on:")
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
@@ -1709,8 +1714,10 @@ class Plugin(indigo.PluginBase):
             zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
             if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off:
                 ## need to turn on Zone
-                self.logger.info("Zone is disabled/off currently, cannot set SetPoint temperature")
-                return
+                self.logger.info("Zone is disabled/off currently, not sure can set SetPoint temperature.. happy to try...")
+                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(settemp),0)
+
+
             elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off:
                 self.logger.debug("Checking: Zone appears on:")
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
@@ -1907,9 +1914,6 @@ class Plugin(indigo.PluginBase):
             else:
                 zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
 
-        else:
-            # Else log failure but do NOT update state on Indigo Server.
-            indigo.server.log(u"send \"%s\" mode change to %s failed" % (dev.name, actionStr), isError=True)
 
     ######################
     # Process action request from Indigo Server to change thermostat's fan mode.
@@ -1929,10 +1933,38 @@ class Plugin(indigo.PluginBase):
     ######################
     # Process action request from Indigo Server to change a cool/heat setpoint.
     def _handleChangeSetpointAction(self, dev, newSetpoint, logActionName, stateKey):
-        if newSetpoint < 8.0:
-            newSetpoint = 16.0  # Arbitrary -- set to whatever hardware minimum setpoint value is.
-        elif newSetpoint > 30.0:
-            newSetpoint = 30.0  # Arbitrary -- set to whatever hardware maximum setpoint value is.
+
+
+        self.logger.debug('_handleChangeSetpoint called: device'+unicode(dev.name)+" newSetpoint:"+unicode(newSetpoint)+ unicode(logActionName)+" "+unicode(stateKey))
+
+        if dev.deviceTypeId == "queZone":
+            maxheatsp = float(dev.states["MaxHeatSetpoint"])
+            minheatsp = float(dev.states["MinHeatSetpoint"])
+            maxcoolsp = float(dev.states["MaxCoolSetpoint"])
+            mincoolsp = float(dev.states["MinCoolSetpoint"])
+            if stateKey == u"setpointCool":
+                if newSetpoint >= maxcoolsp:
+                    self.logger.info( "Maximum Cool Set point reached for zone.  Change Master limit to go higher/lower with the zones.")
+                    return
+                    newSetpoint = maxcoolsp
+                elif newSetpoint <= mincoolsp:
+                    self.logger.info( "Minimum Cool Set point reached for zone.  Change Master limit to go higher/lower with the zones.")
+                    return
+                    newSetpoint = mincoolsp
+            else:
+                if newSetpoint >=maxheatsp:
+                    self.logger.info(  "Maximum Heat Set point reached for zone.  Change Master limit to go higher/lower with the zones.")
+                    return
+                    newSetpoint=maxheatsp
+                elif newSetpoint <= minheatsp:
+                    self.logger.info(  "Minimum Heat Set point reached for zone.  Change Master limit to go higher/lower with the zones.")
+                    return
+                    newSetpoint = minheatsp
+        else:  ## main device settings
+            if newSetpoint < 8.0:
+                newSetpoint = 16.0  # Arbitrary -- set to whatever hardware minimum setpoint value is.
+            elif newSetpoint > 30.0:
+                newSetpoint = 30.0  # Arbitrary -- set to whatever hardware maximum setpoint value is.
 
         sendSuccess = False
 
@@ -1945,19 +1977,20 @@ class Plugin(indigo.PluginBase):
 
         ## if device asked to hardward control main - then turn on main, and change mode, or turn off
         if dev.deviceTypeId == "queZone":
-            self.logger.info("Not support for Zone devices unfortunately")
-            return
 
-
+            zoneNumber = str(int(dev.states['zoneNumber']) - 1)  # counts zones from zero
+            if stateKey == u"setpointHeat":
+                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC",float(newSetpoint), 0)
+                self.logger.info("Heat SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode( newSetpoint) + " degrees")
+            elif stateKey ==u"setpointCool":
+                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(newSetpoint), 0)
+                self.logger.info("Cool SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode( newSetpoint) + " degrees")
+        else:
             ## need to turn on and change mode
-        if stateKey == u"setpointCool":
-            self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Cool_oC", newSetpoint, 0)
-
-
-        elif stateKey == u"setpointHeat":
-            # Command hardware module (dev) to change the heat setpoint to newSetpoint here:
-            # ** IMPLEMENT ME **
-            self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Heat_oC", newSetpoint, 0)
+            if stateKey == u"setpointCool":
+                self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Cool_oC", newSetpoint, 0)
+            elif stateKey == u"setpointHeat":
+                self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Heat_oC", newSetpoint, 0)
 
             # If success then log that the command was successfully sent.
         indigo.server.log(u"sent \"%s\" %s to %.1f°" % (dev.name, logActionName, newSetpoint))
@@ -2060,8 +2093,8 @@ class Plugin(indigo.PluginBase):
         newProps["ShowCoolHeatEquipmentStateUI"]= True
         newProps["SupportsHvacFanMode"] = False
         if device.deviceTypeId == "queZone":
-            newProps["SupportsCoolSetpoint"] = False
-            newProps["SupportsHeatSetpoint"] = False
+            newProps["SupportsCoolSetpoint"] = True
+            newProps["SupportsHeatSetpoint"] = True
             newProps["NumHumidityInputs"] = 0
         device.replacePluginPropsOnServer(newProps)
 ##
@@ -2158,10 +2191,12 @@ class Plugin(indigo.PluginBase):
 
 
                     self.sendingCommand = False
+                    self.latestEventsConnectionError = False
                     self.que.task_done()
 
                 except requests.Timeout:
                     self.logger.info("Request timedout to que.actron.com.au")
+                    self.latestEventsConnectionError = True
                     self.sleep(1)
                     return False
 

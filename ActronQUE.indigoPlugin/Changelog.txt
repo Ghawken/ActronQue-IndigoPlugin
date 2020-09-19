@@ -1,3 +1,7 @@
+0.3.8
+Decrease Actron Timeout
+Add Zone Heat/cool Setpoint within Indigo
+
 0.3.5
 Change to command code, to Que commands one at time in separate thread - hopefully avoiding timeouts
 
