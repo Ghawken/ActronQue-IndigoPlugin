@@ -1565,10 +1565,11 @@ class Plugin(indigo.PluginBase):
                 ## if a zone device needs different command
                 ## probably best to be OFF or anything else
                 zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-
+                # update device here, so if command sent and then re-sent will reflect new temp wanted
+                zonedevice.updateStateOnServer("TempSetPointHeat", float(targetsp))
+                zonedevice.updateStateOnServer("setpointHeat", float(targetsp))
                 self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(targetsp), 0)
                 self.logger.info("Heat SetPoint of Zone " + unicode( int(zoneNumber)+ 1) + " updated to " + unicode(targetsp) + " degrees")
-
         except:
             self.logger.exception("Caught Exception in increaseZoneHP")
 
@@ -1595,7 +1596,9 @@ class Plugin(indigo.PluginBase):
             if zonedevice.deviceTypeId == "queZone":
                 ## if a zone device needs different command
                 ## probably best to be OFF or anything else
-                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
+                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from
+                zonedevice.updateStateOnServer("TempSetPointHeat", float(targetsp))
+                zonedevice.updateStateOnServer("setpointHeat", float(targetsp))
                 self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(targetsp), 0)
                 self.logger.info("Heat SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode(targetsp) + " degrees")
         except:
@@ -1626,7 +1629,8 @@ class Plugin(indigo.PluginBase):
                 ## if a zone device needs different command
                 ## probably best to be OFF or anything else
                 zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-
+                zonedevice.updateStateOnServer("TempSetPointCool", float(targetsp))
+                zonedevice.updateStateOnServer("setpointCool", float(targetsp))
                 self.sendCommand(accessToken, serialNo,  "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(targetsp), 0)
                 self.logger.info("Cool SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode(targetsp) + " degrees")
         except:
@@ -1657,7 +1661,8 @@ class Plugin(indigo.PluginBase):
                 ## if a zone device needs different command
                 ## probably best to be OFF or anything else
                 zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-
+                zonedevice.updateStateOnServer("TempSetPointCool", float(targetsp))
+                zonedevice.updateStateOnServer("setpointCool", float(targetsp))
                 self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(targetsp),  0)
                 self.logger.info(u"Cool SetPoint of Zone " + unicode( int(zoneNumber)+ 1 ) + u" updated to " + unicode(targetsp) + u" degrees")
 
@@ -1980,16 +1985,22 @@ class Plugin(indigo.PluginBase):
 
             zoneNumber = str(int(dev.states['zoneNumber']) - 1)  # counts zones from zero
             if stateKey == u"setpointHeat":
+                dev.updateStateOnServer("TempSetPointHeat", float(newSetpoint))
+                dev.updateStateOnServer("setpointHeat", float(newSetpoint))
                 self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC",float(newSetpoint), 0)
                 self.logger.info("Heat SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode( newSetpoint) + " degrees")
             elif stateKey ==u"setpointCool":
+                dev.updateStateOnServer("TempSetPointCool", float(newSetpoint))
+                dev.updateStateOnServer("setpointCool", float(newSetpoint))
                 self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(newSetpoint), 0)
                 self.logger.info("Cool SetPoint of Zone " + unicode(int(zoneNumber) + 1) + " updated to " + unicode( newSetpoint) + " degrees")
         else:
             ## need to turn on and change mode
             if stateKey == u"setpointCool":
+                dev.updateStateOnServer("setpointCool", float(newSetpoint))
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Cool_oC", newSetpoint, 0)
             elif stateKey == u"setpointHeat":
+                dev.updateStateOnServer("setpointHeat", float(newSetpoint))
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Heat_oC", newSetpoint, 0)
 
             # If success then log that the command was successfully sent.

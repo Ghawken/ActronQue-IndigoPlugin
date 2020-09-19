@@ -1,3 +1,7 @@
+0.3.9
+Update device states before command successful so can deal with multipe commands in row dropping temp
+States typically quickly updating with latestEvents
+
 0.3.8
 Decrease Actron Timeout
 Add Zone Heat/cool Setpoint within Indigo
