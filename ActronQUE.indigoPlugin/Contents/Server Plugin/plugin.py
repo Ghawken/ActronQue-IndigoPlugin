@@ -2224,7 +2224,7 @@ class Plugin(indigo.PluginBase):
                     if r.status_code != 200:
                         self.logger.debug("Error Message from get System Status.")
                         self.logger.debug(unicode(r.text))
-                        repeats = repeats + 1
+                        commandrepeats = commandrepeats + 1
                         if r.json() is None:
                             self.logger.info("Nothing returned from Action API.  Aborting.")
 
@@ -2233,10 +2233,9 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("Type returned and is " + unicode(typereturned))
                             if typereturned == "timeout":
                                 self.logger.info("Timeout received from Actron API for System Command.  Will retry.")
-                                if int(repeats) <= 5:
+                                if int(commandrepeats) <= 5:
                                     self.sleep(5)
-                                    self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody,
-                                                            int(repeats))
+                                    self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody,   int(commandrepeats))
                                 else:
                                     self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
 
@@ -2244,8 +2243,8 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Recreating Tokens incase expired.  Another login and then retrying.")
                         self.checkMainDevices()
                         self.sleep(5)
-                        if int(repeats) <= 5:
-                            self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody, int(repeats))
+                        if int(commandrepeats) <= 5:
+                            self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody, int(commandrepeats))
                         else:
                             self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
 
