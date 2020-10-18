@@ -258,14 +258,20 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("Blank Serial No.  Rechecking for Serial")
                             serialNo = self.getACsystems(accessToken)
 
-                        if systemcheckonly :  ## don't use status updates..
-                            if t.time()> getfullSystemStatus:
+                        if dev.states['deviceIsOnline']== False:
+                            # if device offline need full systemcheck...
+                            if t.time() > getfullSystemStatus:
                                 zonenames = self.getSystemStatus(dev, accessToken, serialNo)
-                                getfullSystemStatus = t.time()+ 300
-                        else:  ## disabled use latest Events..
-                            if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
-                                self.getlatestEvents(dev, accessToken,serialNo)
-                                getlatestEventsTime = t.time() +4
+                                getfullSystemStatus = t.time() + 300
+                        if dev.states['deviceIsOnline']:
+                            if systemcheckonly :  ## don't use status updates..
+                                if t.time()> getfullSystemStatus:
+                                    zonenames = self.getSystemStatus(dev, accessToken, serialNo)
+                                    getfullSystemStatus = t.time()+ 300
+                            else:  ## disabled use latest Events..
+                                if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
+                                    self.getlatestEvents(dev, accessToken,serialNo)
+                                    getlatestEventsTime = t.time() +4
 
                 self.sleep(4)
                 if t.time() > updateAccessToken:
@@ -438,17 +444,16 @@ class Plugin(indigo.PluginBase):
             if serialNo == None or serialNo == "":
                 self.logger.debug("Blank Serial No.  Rechecking for Serial")
                 return
-
             skippingparsing = False
             lasteventid = self.latestevents.get(device.id,"A")
+                # if no last event or device is Offline pull all events.
+
             # will give KeyError if blank, use get to avoid, use A pulls all
-
-          #  if self.debug4:
-         #       self.logger.debug("Getting Latest Events for System Serial No %s" % serialNo)
-         #       self.logger.debug(u"LastEventID: " + unicode(lasteventid))
+            #  if self.debug4:
+            #       self.logger.debug("Getting Latest Events for System Serial No %s" % serialNo)
+            #       self.logger.debug(u"LastEventID: " + unicode(lasteventid))
             # self.logger.info("Connecting to %s" % address)
-           # url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
-
+            # url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
             if lasteventid=="A":
                 url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
                 # don't parse this info - just re-do the system state already received.
@@ -456,8 +461,6 @@ class Plugin(indigo.PluginBase):
                 skippingparsing=True
             else:
                 url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/newer?serial=' + str(serialNo)+ '&newerThanEventId='+str(lasteventid)
-
-
            #     self.logger.debug(unicode(url))
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
@@ -488,7 +491,7 @@ class Plugin(indigo.PluginBase):
             if skippingparsing:
                 self.logger.info("First Run of Latest Events: Skipping updating once.")
                 return
-
+            timestamp = ""
             for events in reversed(eventslist):
                 if self.debug4:
                     self.logger.debug(u'event:'+unicode(events))
@@ -502,6 +505,8 @@ class Plugin(indigo.PluginBase):
                     self.parsestatusChangeBroadcast(device,serialNo,events['data'])
                     #self.logger.error(unicode(events))
                 #self.logger.debug(u'event id:'+events['id'])
+                timestamp = events['timestamp']
+           # self.logger.error(unicode(timestamp))
             return
         except requests.exceptions.ReadTimeout, e:
             self.logger.debug("ReadTimeout with get Latest Events from Actron API:" + unicode(e))
@@ -613,6 +618,7 @@ class Plugin(indigo.PluginBase):
                         if self.debug4:
                             self.logger.debug( u"Updating Zone:" + unicode(foundzone.states['zoneName']) + u" with new Event:" + unicode( events) + u" and data:" + unicode(results))
                         foundzone.updateStateOnServer("temperatureInput1", float(results))
+                        foundzone.updateStateOnServer("currentTemp", float(results))
                         eventactioned = True
                     elif 'LiveTempHysteresis_oC' in events:
                         if self.debug4:
@@ -687,6 +693,20 @@ class Plugin(indigo.PluginBase):
                             device.updateStateOnServer("quietMode", True)
                         elif str(results) == "False":
                             device.updateStateOnServer("quietMode", False)
+                        eventactioned = True
+                    elif 'UserAirconSettings.Mode' in events:  ## use whole thing as Mode in few things
+                        mode = str(results)
+                        if self.debug4:
+                            self.logger.debug(  u"Updating Master Device with new Event:" + unicode(events) + u" and data:" + unicode( results))
+                        if mode == "AUTO":
+                            MainStatus = indigo.kHvacMode.HeatCool
+                        elif mode == "HEAT":
+                            MainStatus = indigo.kHvacMode.Heat
+                        elif mode == "COOL":
+                            MainStatus = indigo.kHvacMode.Cool
+                        else:
+                            MainStatus = indigo.kHvacMode.HeatCool
+                        device.updateStateOnServer("hvacOperationMode", MainStatus)
                         eventactioned = True
                     elif 'TemperatureSetpoint_Cool_oC' in events:
                         if self.debug4:
@@ -769,10 +789,29 @@ class Plugin(indigo.PluginBase):
         SystemSetpoint_Heat = float(0)
         MainStatus = indigo.kHvacMode.Off
         zonenames = ""
+        lastContact =""
 
         if 'data' in jsonResponse:
             if "<" + serialNo.upper() + ">" in jsonResponse['data']:
                 self.logger.debug(unicode(jsonResponse['data']["<" + serialNo.upper() + ">"]))
+            if 'isOnline' in jsonResponse['data']:  ## check system online
+                self.logger.debug(u'isOnline Returned:' + unicode(jsonResponse['data']['isOnline']))
+                if str(jsonResponse['data']['isOnline'])=='False':
+                    self.logger.info(u'System is reporting that it is Offline.')
+                    #self.logger.info(u'Last Contact '+unicode(jsonResponse['data']['timeSinceLastContact'])+u' hours/minutes/seconds ago')
+                    device.updateStateOnServer('deviceIsOnline', value=False)
+                    if 'timeSinceLastContact' in jsonResponse['data']:
+                        self.logger.info(u'Last Contact ' + unicode(jsonResponse['data']['timeSinceLastContact']) + u' hours/minutes/seconds ago')
+                        lastContact = str(jsonResponse['data']['timeSinceLastContact'])
+                        device.updateStateOnServer('lastContact',lastContact)
+                    return
+                else:
+                    device.updateStateOnServer('deviceIsOnline', value=True)
+                    if 'timeSinceLastContact' in jsonResponse['data']:
+                        self.logger.info(u'Last Contact ' + unicode(jsonResponse['data']['timeSinceLastContact']) + u' hours/minutes/seconds ago')
+                        lastContact = str(jsonResponse['data']['timeSinceLastContact'])
+                        device.updateStateOnServer('lastContact',lastContact)
+
             if "AirconSystem" in jsonResponse['data']:
                 if 'IndoorUnit' in jsonResponse['data']['AirconSystem']:
                     indoorModel = jsonResponse['data']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
@@ -1042,6 +1081,7 @@ class Plugin(indigo.PluginBase):
                 return
 # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
             self.logger.debug(unicode(r.text))
+
             jsonResponse = r.json()
             listzonetemps = []
             listzonehumidity = []
@@ -1068,6 +1108,22 @@ class Plugin(indigo.PluginBase):
             SystemSetpoint_Heat = float(0)
             MainStatus = indigo.kHvacMode.Off
             zonenames = ""
+
+            if 'isOnline' in jsonResponse:  ## check system online
+                self.logger.debug(unicode(jsonResponse['isOnline']))
+                if str(jsonResponse['isOnline'])=='False':
+                    self.logger.info(u'System is reporting that it is Offline.')
+                    device.updateStateOnServer('deviceIsOnline', value=False)
+                    if 'timeSinceLastContact' in jsonResponse:
+                        self.logger.info(u'Last Contact ' + unicode(jsonResponse['timeSinceLastContact']) + u' hours/minutes/seconds ago')
+                        lastContact = str(jsonResponse['timeSinceLastContact'])
+                        device.updateStateOnServer('lastContact', lastContact)
+                    return
+                else:  #online true
+                    device.updateStateOnServer('deviceIsOnline', value=True)
+                    if 'timeSinceLastContact' in jsonResponse:
+                        lastContact = str(jsonResponse['timeSinceLastContact'])
+                        device.updateStateOnServer('lastContact', lastContact)
 
             if 'lastKnownState' in jsonResponse:
                 if "<"+serialNo.upper()+">" in jsonResponse['lastKnownState']:
@@ -2098,7 +2154,7 @@ class Plugin(indigo.PluginBase):
         device.stateListOrDisplayStateIdChanged()
         newProps = device.pluginProps
         if device.deviceTypeId == 'ActronQueMain':
-            device.updateStateOnServer('deviceIsOnline', value=True)
+            #device.updateStateOnServer('deviceIsOnline', value=True)
             newProps["NumHumidityInputs"] = 1
 
         newProps["ShowCoolHeatEquipmentStateUI"]= True

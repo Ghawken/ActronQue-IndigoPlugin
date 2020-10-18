@@ -138,6 +138,11 @@
                 <TriggerLabel>Compressor Capacity</TriggerLabel>
 			 <ControlPageLabel>Compressor Capacity</ControlPageLabel>
             </State>
+         <State id="lastContact">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Time of last Contact with Controller to Cloud</TriggerLabel>
+                <ControlPageLabel>Time last Contact with Local Controller</ControlPageLabel>
+             </State>
 		 		 <State id="indoorFanPWM">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>IndoorFan PWM</TriggerLabel>
@@ -179,7 +184,7 @@
 				<ControlPageLabel>Outdoor Unit Fan Speed</ControlPageLabel>
             </State>
         </States>
-    <UiDisplayStateId>alarmState</UiDisplayStateId>
+    <UiDisplayStateId>deviceIsOnline</UiDisplayStateId>
  </Device>
 
   	<Device type="thermostat" id="queZone">
