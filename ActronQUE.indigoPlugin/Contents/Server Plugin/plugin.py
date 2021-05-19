@@ -244,6 +244,7 @@ class Plugin(indigo.PluginBase):
             # check once on statup
             # also check zones
             self.checkMainDevices()  #
+            self.sleep(10)
             while True:
                 for dev in indigo.devices.itervalues(filter="self"):
                     if dev.deviceTypeId == "ActronQueMain":
@@ -257,7 +258,7 @@ class Plugin(indigo.PluginBase):
                         elif serialNo == None or serialNo == "":
                             self.logger.debug("Blank Serial No.  Rechecking for Serial")
                             serialNo = self.getACsystems(accessToken)
-
+                            self.sleep(5)
                         if dev.states['deviceIsOnline']== False:
                             # if device offline need full systemcheck...
                             if t.time() > getfullSystemStatus:
@@ -442,7 +443,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Access token nil.  Aborting")
                 return
             if serialNo == None or serialNo == "":
-                self.logger.debug("Blank Serial No.  Rechecking for Serial")
+                self.logger.debug("Blank Serial No. still Empty skipping getLatestEvents currently")
                 return
             skippingparsing = False
             lasteventid = self.latestevents.get(device.id,"A")
@@ -1065,7 +1066,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Access token nil.  Aborting")
                 return
             if serialNo == None or serialNo=="":
-                self.logger.debug("Blank Serial No.  Rechecking for Serial")
+                self.logger.debug("Blank Serial No. still  Skipping getSystemStatus for now")
                 return
             self.logger.debug("Getting System Status for System Serial No %s" % serialNo)
             # self.logger.info("Connecting to %s" % address)
