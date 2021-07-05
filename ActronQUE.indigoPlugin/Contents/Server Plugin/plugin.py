@@ -319,11 +319,11 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Updated device pluginProps with Serial Number:")
                         self.logger.debug("Device :"+dev.name+" PluginProps:")
                         dev.updateStateOnServer('serialNumber', value=serialNo )
+                        dev.replacePluginPropsOnServer(localPropscopy)
                     else:
                         self.logger.info("Unable to get Serial Number, check username, Password")
                         return
                     ## update system status
-                    dev.replacePluginPropsOnServer(localPropscopy)
 
                     zonenames = self.getSystemStatus(dev, accessToken, serialNo)
 
@@ -2159,7 +2159,7 @@ class Plugin(indigo.PluginBase):
         try:
             device.stateListOrDisplayStateIdChanged()
             newProps = device.pluginProps
-            #self.logger.debug("Props:"+unicode(newProps))
+            self.logger.debug("Props:"+unicode(newProps))
             if device.deviceTypeId == 'ActronQueMain':
                 #device.updateStateOnServer('deviceIsOnline', value=True)
                 newProps["NumHumidityInputs"] = 1
