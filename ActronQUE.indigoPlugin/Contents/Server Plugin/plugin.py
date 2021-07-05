@@ -262,12 +262,12 @@ class Plugin(indigo.PluginBase):
                         if dev.states['deviceIsOnline']== False:
                             # if device offline need full systemcheck...
                             if t.time() > getfullSystemStatus:
-                                zonenames = self.getSystemStatus(dev, accessToken, serialNo)
+                                self.getSystemStatus(dev, accessToken, serialNo)
                                 getfullSystemStatus = t.time() + 300
                         if dev.states['deviceIsOnline']:
                             if systemcheckonly :  ## don't use status updates..
                                 if t.time()> getfullSystemStatus:
-                                    zonenames = self.getSystemStatus(dev, accessToken, serialNo)
+                                    self.getSystemStatus(dev, accessToken, serialNo)
                                     getfullSystemStatus = t.time()+ 300
                             else:  ## disabled use latest Events..
                                 if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
@@ -326,8 +326,11 @@ class Plugin(indigo.PluginBase):
                     dev.replacePluginPropsOnServer(localPropscopy)
 
                     zonenames = self.getSystemStatus(dev, accessToken, serialNo)
-                    localPropscopy['zoneNames'] = zonenames
-                    dev.replacePluginPropsOnServer(localPropscopy)
+
+                    if zonenames !="blank":
+                        localPropscopy['zoneNames'] = zonenames
+                        dev.replacePluginPropsOnServer(localPropscopy)
+
                     self.logger.debug("Device :" + dev.name + " PluginProps:")
                     self.logger.debug(unicode(dev.pluginProps))
 
@@ -1064,10 +1067,10 @@ class Plugin(indigo.PluginBase):
         try:
             if accessToken == None or accessToken=="":
                 self.logger.debug("Access token nil.  Aborting")
-                return
+                return "blank"
             if serialNo == None or serialNo=="":
                 self.logger.debug("Blank Serial No. still  Skipping getSystemStatus for now")
-                return
+                return "blank"
             self.logger.debug("Getting System Status for System Serial No %s" % serialNo)
             # self.logger.info("Connecting to %s" % address)
             url = 'https://que.actronair.com.au/api/v0/client/ac-systems/status/latest?serial='+str(serialNo)
@@ -1079,7 +1082,7 @@ class Plugin(indigo.PluginBase):
             if r.status_code != 200:
                 self.logger.info("Error Message from get System Status")
                 self.logger.debug(unicode(r.text))
-                return
+                return "blank"
 # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
             self.logger.debug(unicode(r.text))
 
@@ -1119,7 +1122,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.info(u'Last Contact ' + unicode(jsonResponse['timeSinceLastContact']) + u' hours/minutes/seconds ago')
                         lastContact = str(jsonResponse['timeSinceLastContact'])
                         device.updateStateOnServer('lastContact', lastContact)
-                    return
+                    return "blank"
                 else:  #online true
                     device.updateStateOnServer('deviceIsOnline', value=True)
                     if 'timeSinceLastContact' in jsonResponse:
@@ -1369,32 +1372,33 @@ class Plugin(indigo.PluginBase):
         except requests.exceptions.ReadTimeout,e:
             self.logger.debug("ReadTimeout with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
         except requests.exceptions.Timeout,e:
             self.logger.debug("Timeout with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
         except requests.exceptions.ConnectionError,e:
             self.logger.debug("ConnectionError with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
         except requests.exceptions.ConnectTimeout,e:
             self.logger.debug("Connect Timeout with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
         except requests.exceptions.HTTPError,e:
             self.logger.debug("HttpError with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
         except requests.exceptions.SSLError,e:
             self.logger.debug("SSL with get System Actron Air:"+unicode(e))
             self.sleep(30)
-            return
+            return "blank"
 
         except Exception, e:
             self.logger.exception("Error getting System Status : " + repr(e))
             self.logger.debug("Error connecting" + unicode(e.message))
-
+            self.sleep(15)
+            return "blank"
 
 
     def getPairingToken(self,username, password):
@@ -1835,7 +1839,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Probably expired token.  Running Access Token Recreate")
                 self.checkMainDevices()
             else:
-                zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
+                self.getSystemStatus(maindevice, accessToken, serialNo)
         return
 
     def setQuiet(self, action):
@@ -1894,7 +1898,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Probably expired token.  Running Access Token Recreate")
                 self.checkMainDevices()
             else:
-                zonenames = self.getSystemStatus(dev, accessToken, serialNo)
+                self.getSystemStatus(dev, accessToken, serialNo)
         else: ## if zonenames - need to get device of Main
             maindevice = indigo.devices[int(dev.states["deviceMasterController"])]
             accessToken = maindevice.pluginProps['accessToken']
@@ -1904,7 +1908,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Probably expired token.  Running Access Token Recreate")
                 self.checkMainDevices()
             else:
-                zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
+                self.getSystemStatus(maindevice, accessToken, serialNo)
     ######################
     def returnmainAccessSerial(self,dev):
         self.logger.debug("Figuring out Access Token from Hardware")
@@ -2155,7 +2159,7 @@ class Plugin(indigo.PluginBase):
         try:
             device.stateListOrDisplayStateIdChanged()
             newProps = device.pluginProps
-            self.logger.debug("Props:"+unicode(newProps))
+            #self.logger.debug("Props:"+unicode(newProps))
             if device.deviceTypeId == 'ActronQueMain':
                 #device.updateStateOnServer('deviceIsOnline', value=True)
                 newProps["NumHumidityInputs"] = 1
