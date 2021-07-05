@@ -118,6 +118,15 @@ class Plugin(indigo.PluginBase):
 
         self.triggers = {}
 
+        for dev in indigo.devices.itervalues(filter="self"):
+            if dev.deviceTypeId == "ActronQueMain":
+                if dev.enabled:
+                    localPropscopy = dev.pluginProps
+                    localPropscopy['accessToken']= ""
+                    localPropscopy['serialNo']= ""
+                    self.logger.debug("Resetting device pluginProps Serial/Access Token:")
+                    dev.replacePluginPropsOnServer(localPropscopy)
+
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
     def __del__(self):
@@ -252,12 +261,14 @@ class Plugin(indigo.PluginBase):
                         serialNo = dev.pluginProps['serialNo']
                         systemcheckonly = dev.pluginProps.get('systemcheckonly', False)
                         if accessToken == "" or accessToken == None:
-                            self.logger.info("Try again later, once Main device setup and connected")
-                            self.logger.error("Probably expired token")
+                            self.logger.info("Failed to get Access Token.  ")
+                            self.logger.info("May be expired token, or Actron API system isues.")
+                            self.sleep(10)
+                            updateAccessToken = t.time() + 2
                             continue
                         elif serialNo == None or serialNo == "":
                             self.logger.debug("Blank Serial No.  Rechecking for Serial")
-                            serialNo = self.getACsystems(accessToken)
+                            self.checkMainDevices()
                             self.sleep(5)
                         if dev.states['deviceIsOnline']== False:
                             # if device offline need full systemcheck...
@@ -276,7 +287,7 @@ class Plugin(indigo.PluginBase):
 
                 self.sleep(4)
                 if t.time() > updateAccessToken:
-                    self.logger.info("Updating Access Token as 24 hours has passed")
+                    self.logger.info("Updating Access Token as Failed to connect or 24 hours has passed")
                     self.checkMainDevices()
                     updateAccessToken = t.time() + 60 * 60 * 24
 
@@ -339,9 +350,9 @@ class Plugin(indigo.PluginBase):
         try:
             if accessToken == None or accessToken=="":
                 self.logger.debug("Access token nil.  Aborting")
-                return
+                return "blank"
 
-            self.logger.debug( "Trying to using access Token %s" % accessToken )
+            self.logger.debug( "Trying to use access Token %s" % accessToken )
             #self.logger.info("Connecting to %s" % address)
             url = 'https://que.actronair.com.au/api/v0/client/ac-systems'
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
@@ -362,18 +373,19 @@ class Plugin(indigo.PluginBase):
                             return serialNumber
             else:
                 self.logger.error(unicode(r.text))
-                return
+                self.sleep(30)
+                return "blank"
 
         except requests.ReadTimeout,e:
             self.logger.info("ReadTimeout connecting to Actron.  Retrying.")
             self.logger.debug("ReadTimeout connecting to Actron. Retrying."+unicode(e))
-
+            return "blank"
 
         except Exception, e:
             self.logger.exception("Error getting AC systems : " + repr(e))
             self.logger.debug("Error connecting" + unicode(e.message))
             self.connected = False
-
+            return "blank"
     ###########################
     # find a valid device name
     ###########################
@@ -1404,7 +1416,7 @@ class Plugin(indigo.PluginBase):
     def getPairingToken(self,username, password):
 
         try:
-            self.logger.info( "Trying to connect %s" % username )
+            self.logger.info( "Trying to connect using account username: %s" % username )
             #self.logger.info("Connecting to %s" % address)
             url = 'https://que.actronair.com.au/api/v0/client/user-devices'
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0'}
@@ -1453,6 +1465,7 @@ class Plugin(indigo.PluginBase):
         except Exception, e:
             self.logger.debug("Error getting Pairing Token : " + repr(e))
             self.logger.debug( "Error connecting"+unicode(e.message))
+            self.sleep(30)
             self.connected = False
             return ""
 

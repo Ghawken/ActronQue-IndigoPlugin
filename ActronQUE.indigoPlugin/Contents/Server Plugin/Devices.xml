@@ -65,14 +65,17 @@
 				   type="textfield"
 				   tooltip=""
 				   default=""
-                hidden="true"
+                       readonly="true"
+                hidden="false"
                 >
+                  <Label>Serial No:  </Label>
 			</Field>
         <Field id="zoneNames"
 				   type="textfield"
 				   tooltip=""
 				   default=""
                 hidden="true"
+
                 >
 			</Field>
 
