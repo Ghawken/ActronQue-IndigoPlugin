@@ -2152,19 +2152,24 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, device):
         self.logger.debug(u"deviceStartComm called for " + device.name)
-        device.stateListOrDisplayStateIdChanged()
-        newProps = device.pluginProps
-        if device.deviceTypeId == 'ActronQueMain':
-            #device.updateStateOnServer('deviceIsOnline', value=True)
-            newProps["NumHumidityInputs"] = 1
+        try:
+            device.stateListOrDisplayStateIdChanged()
+            newProps = device.pluginProps
+            self.logger.debug("Props:"+unicode(newProps))
+            if device.deviceTypeId == 'ActronQueMain':
+                #device.updateStateOnServer('deviceIsOnline', value=True)
+                newProps["NumHumidityInputs"] = 1
 
-        newProps["ShowCoolHeatEquipmentStateUI"]= True
-        newProps["SupportsHvacFanMode"] = False
-        if device.deviceTypeId == "queZone":
-            newProps["SupportsCoolSetpoint"] = True
-            newProps["SupportsHeatSetpoint"] = True
-            newProps["NumHumidityInputs"] = 0
-        device.replacePluginPropsOnServer(newProps)
+            newProps["ShowCoolHeatEquipmentStateUI"]= True
+            newProps["SupportsHvacFanMode"] = False
+
+            if device.deviceTypeId == "queZone":
+                newProps["SupportsCoolSetpoint"] = True
+                newProps["SupportsHeatSetpoint"] = True
+                newProps["NumHumidityInputs"] = 0
+            device.replacePluginPropsOnServer(newProps)
+        except:
+            self.logger.exception("Exception in DeviceStartComm")
 ##
     def generateLabels(self, device,valuesDict, somethingunused):
         self.logger.info("Updating Zone and other Labels")
