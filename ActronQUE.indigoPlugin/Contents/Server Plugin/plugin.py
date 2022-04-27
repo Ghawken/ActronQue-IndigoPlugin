@@ -817,7 +817,7 @@ class Plugin(indigo.PluginBase):
                     #self.logger.info(u'Last Contact '+unicode(jsonResponse['data']['timeSinceLastContact'])+u' hours/minutes/seconds ago')
                     device.updateStateOnServer('deviceIsOnline', value=False)
                     if 'timeSinceLastContact' in jsonResponse['data']:
-                        self.logger.info(u'Last Contact ' + unicode(jsonResponse['data']['timeSinceLastContact']) + u' hours/minutes/seconds ago')
+                        self.logger.info(u'Last Contact ' + unicode(jsonResponse['data']['timeSinceLastContact']) + u' days/hours/minutes/seconds ago')
                         lastContact = str(jsonResponse['data']['timeSinceLastContact'])
                         device.updateStateOnServer('lastContact',lastContact)
                     return
@@ -830,7 +830,8 @@ class Plugin(indigo.PluginBase):
 
             if "AirconSystem" in jsonResponse['data']:
                 if 'IndoorUnit' in jsonResponse['data']['AirconSystem']:
-                    indoorModel = jsonResponse['data']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
+                    if "NV_DeviceID" in jsonResponse['data']['AirconSystem']['IndoorUnit']:
+                        indoorModel = jsonResponse['data']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
             if 'Alerts' in jsonResponse['data']:
                 alertCF = jsonResponse['data']['Alerts']['CleanFilter']
                 alertDRED = jsonResponse['data']['Alerts']['DRED']
@@ -1146,7 +1147,8 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(unicode(jsonResponse['lastKnownState']["<"+serialNo.upper()+">"]))
                 if "AirconSystem" in jsonResponse['lastKnownState']:
                     if 'IndoorUnit' in jsonResponse['lastKnownState']['AirconSystem']:
-                        indoorModel = jsonResponse['lastKnownState']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
+                        if "NV_DeviceID" in jsonResponse['lastKnownState']['AirconSystem']["IndoorUnit"]:
+                            indoorModel = jsonResponse['lastKnownState']['AirconSystem']['IndoorUnit']["NV_DeviceID"]
                 if 'Alerts' in jsonResponse['lastKnownState']:
                     alertCF = jsonResponse['lastKnownState']['Alerts']['CleanFilter']
                     alertDRED = jsonResponse['lastKnownState']['Alerts']['DRED']
