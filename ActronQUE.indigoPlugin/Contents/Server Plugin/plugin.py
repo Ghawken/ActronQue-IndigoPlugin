@@ -359,7 +359,7 @@ class Plugin(indigo.PluginBase):
                        'Authorization':'Bearer '+accessToken                       }
            # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
 
-            r = requests.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=15, verify=False)
             if r.status_code == 200:
                 self.logger.debug(str(r.text))
                 jsonResponse = r.json()
@@ -482,7 +482,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=10)
+            r = requests.get(url, headers=headers, timeout=10,verify=False)
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(str(r.text))
@@ -1091,7 +1091,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=15)
+            r = requests.get(url, headers=headers, timeout=15, verify=False)
             if r.status_code != 200:
                 self.logger.info("Error Message from get System Status")
                 self.logger.debug(str(r.text))
@@ -1410,7 +1410,7 @@ class Plugin(indigo.PluginBase):
 
         except Exception as e:
             self.logger.exception("Error getting System Status : " + repr(e))
-            self.logger.debug("Error connecting" + str(e.message))
+            self.logger.debug("Error connecting" + str(e))
             self.sleep(15)
             return "blank"
 
@@ -1424,7 +1424,7 @@ class Plugin(indigo.PluginBase):
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0'}
             payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
 
-            r = requests.post(url, data=payload, headers=headers, timeout=10)
+            r = requests.post(url, data=payload, headers=headers, timeout=10, verify=False)
             pairingToken =""
 
             if r.status_code==200:
@@ -1448,7 +1448,7 @@ class Plugin(indigo.PluginBase):
             payload2 = {'grant_type':'refresh_token', 'refresh_token':pairingToken, 'client_id':'app'}
             url2 = 'https://que.actronair.com.au/api/v0/oauth/token'
 
-            newr = requests.post(url2, data=payload2, headers=headers, timeout=10)
+            newr = requests.post(url2, data=payload2, headers=headers, timeout=10, verify=False)
 
             accessToken = ""
             if newr.status_code==200:
@@ -2242,7 +2242,7 @@ class Plugin(indigo.PluginBase):
                     payload = {"command": {commandtype: commandbody, "type": "set-settings"}}
 
                     self.logger.debug(str(payload))
-                    r = requests.post(url, headers=headers, json=payload, timeout=15)
+                    r = requests.post(url, headers=headers, json=payload, timeout=15, verify=False)
                     self.logger.debug(r.text)
 
                     if r.status_code != 200:
