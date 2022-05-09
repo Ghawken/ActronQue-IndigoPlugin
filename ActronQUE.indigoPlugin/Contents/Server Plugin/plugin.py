@@ -16,6 +16,7 @@ import requests
 from collections import namedtuple
 from collections import OrderedDict
 import json
+from functools import reduce
 
 from queue import *
 import threading
