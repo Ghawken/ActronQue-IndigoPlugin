@@ -106,6 +106,16 @@
                 <TriggerLabel>Indoor Fan Speed</TriggerLabel>
                 <ControlPageLabel>Indoor Fan Speed </ControlPageLabel>
             </State>
+         <State id="fanOn">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Fan On or Off True False</TriggerLabel>
+                <ControlPageLabel>Fan On or Off True False</ControlPageLabel>
+            </State>
+                  <State id="errorCode">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Error Code</TriggerLabel>
+                <ControlPageLabel>Error Code</ControlPageLabel>
+            </State>
          <State id="quietMode">
                 <ValueType>Boolean</ValueType>
                 <TriggerLabel>Quiet Mode Setting</TriggerLabel>

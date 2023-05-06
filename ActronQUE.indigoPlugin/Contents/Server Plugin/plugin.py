@@ -13,6 +13,8 @@ import shutil
 import logging
 import sys
 import requests
+import traceback
+from os import path
 from collections import namedtuple
 from collections import OrderedDict
 import json
@@ -40,11 +42,51 @@ kFanModeEnumToStrMap = {
 }
 
 def _lookupActionStrFromHvacMode(hvacMode):
-	return kHvacModeEnumToStrMap.get(hvacMode, u"unknown")
+	return kHvacModeEnumToStrMap.get(hvacMode, u"OFF")
 
 def _lookupActionStrFromFanMode(fanMode):
 	return kFanModeEnumToStrMap.get(fanMode, u"unknown")
+# update to python3 changes
+################################################################################
+class IndigoLogHandler(logging.Handler):
+    def __init__(self, display_name, level=logging.NOTSET):
+        super().__init__(level)
+        self.displayName = display_name
 
+    def emit(self, record):
+        """ not used by this class; must be called independently by indigo """
+        logmessage = ""
+        try:
+            levelno = int(record.levelno)
+            is_error = False
+            is_exception = False
+            if self.level <= levelno:  ## should display this..
+                if record.exc_info !=None:
+                    is_exception = True
+                if levelno == 5:	# 5
+                    logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                elif levelno == logging.DEBUG:	# 10
+                    logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                elif levelno == logging.INFO:		# 20
+                    logmessage = record.getMessage()
+                elif levelno == logging.WARNING:	# 30
+                    logmessage = record.getMessage()
+                elif levelno == logging.ERROR:		# 40
+                    logmessage = '({}: Function: {}  line: {}):    Error :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                    is_error = True
+                if is_exception:
+                    logmessage = '({}: Function: {}  line: {}):    Exception :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                    indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=levelno)
+                    if record.exc_info !=None:
+                        etype,value,tb = record.exc_info
+                        tb_string = "".join(traceback.format_tb(tb))
+                        indigo.server.log(f"Traceback:\n{tb_string}", type=self.displayName, isError=is_error, level=levelno)
+                        indigo.server.log(f"Error in plugin execution:\n\n{traceback.format_exc(30)}", type=self.displayName, isError=is_error, level=levelno)
+                    indigo.server.log(f"\nExc_info: {record.exc_info} \nExc_Text: {record.exc_text} \nStack_info: {record.stack_info}",type=self.displayName, isError=is_error, level=levelno)
+                    return
+                indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=levelno)
+        except Exception as ex:
+            indigo.server.log(f"Error in Logging: {ex}",type=self.displayName, isError=is_error, level=levelno)
 ################################################################################
 class QueCommand:
     def __init__(self, accessToken, serialNo, commandtype, commandbody, commandrepeats):
@@ -58,16 +100,25 @@ class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
-        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%Y-%m-%d %H:%M:%S')
+        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)s\t%(name)s.%(funcName)s:%(filename)s:%(lineno)s:\t%(message)s', datefmt='%d-%m-%Y %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
-
+        ################################################################################
+        # Setup Logging
+        ################################################################################
+        self.logger.setLevel(logging.DEBUG)
         try:
-            self.logLevel = int(self.pluginPrefs[u"showDebugLevel"])
+            self.logLevel = int(self.pluginPrefs["showDebugLevel"])
+            self.fileloglevel = int(self.pluginPrefs["showDebugFileLevel"])
         except:
             self.logLevel = logging.INFO
+            self.fileloglevel = logging.DEBUG
 
+        self.logger.removeHandler(self.indigo_log_handler)
+        self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
+        ifmt = logging.Formatter("%(message)s")
+        self.indigo_log_handler.setFormatter(ifmt)
         self.indigo_log_handler.setLevel(self.logLevel)
-        self.logger.debug(u"logLevel = " + str(self.logLevel))
+        self.logger.addHandler(self.indigo_log_handler)
 
         self.prefsUpdated = False
         self.logger.info(u"")
@@ -143,6 +194,7 @@ class Plugin(indigo.PluginBase):
 
         if not userCancelled:
             self.logLevel = int(valuesDict.get("showDebugLevel", '5'))
+            self.fileloglevel = int(valuesDict.get("showDebugFileLevel", '5'))
             self.ipaddress = valuesDict.get('ipaddress', '')
             # self.logger.error(str(valuesDict))
             self.port = valuesDict.get('port', False)
@@ -157,6 +209,10 @@ class Plugin(indigo.PluginBase):
             self.indigo_log_handler.setLevel(self.logLevel)
             self.logger.debug(u"logLevel = " + str(self.logLevel))
             self.logger.debug(u"User prefs saved.")
+
+            self.indigo_log_handler.setLevel(self.logLevel)
+            self.plugin_file_handler.setLevel(self.fileloglevel)
+
             self.logger.debug(u"Debugging on (Level: {0})".format(self.logLevel))
 
         return True
@@ -170,18 +226,6 @@ class Plugin(indigo.PluginBase):
         #indigo.server.log(u"Stopping  device: " + dev.name)
         if dev.deviceTypeId == 'ActronQueMain':
             dev.updateStateOnServer('deviceIsOnline', value=False)
-
-
-    def forceUpdate(self):
-        self.updater.update(currentVersion='0.0.0')
-
-    def checkForUpdates(self):
-        if self.updater.checkForUpdate() == False:
-            indigo.server.log(u"No Updates are Available")
-
-    def updatePlugin(self):
-        self.updater.update()
-
 
     ## return list of temperature options
     # remembering can only set to a temperature within range of main set point
@@ -569,6 +613,8 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug(u"Ignoring Last Screen Touch UTC update")
                     eventactioned = True
                 ## Zone Info
+                elif "@metadata" in events:
+                    eventactioned = True
                 elif 'RemoteZoneInfo' in events:  #zone info update
                     ## parse the Zone Number
                     zonenumber = int(events.split('[', 1)[1].split(']')[0])
@@ -701,6 +747,9 @@ class Plugin(indigo.PluginBase):
                             MainStatus = indigo.kHvacMode.HeatCool
                         device.updateStateOnServer("hvacOperationMode", MainStatus)
                         eventactioned = True
+                    elif "LiveAircon.AmRunningFan" in events:
+                        device.updateStateOnServer("fanOn", results)
+                        eventactioned= True
                 elif 'UserAirconSettings' in events: ## system data
                     if 'QuietMode' in events:
                         if self.debug4:
@@ -724,6 +773,14 @@ class Plugin(indigo.PluginBase):
                             MainStatus = indigo.kHvacMode.HeatCool
                         device.updateStateOnServer("hvacOperationMode", MainStatus)
                         eventactioned = True
+                    elif "UserAirconSettings.isOn" in events:
+                        status = results
+                        if results:
+                            self.logger.debug(f"AirConditioning is running")
+                        else:
+                            self.logger.debug(f"AirConditioning is Off")
+                        eventactioned = True
+
                     elif 'TemperatureSetpoint_Cool_oC' in events:
                         if self.debug4:
                             self.logger.debug(  u"Updating Master Device with new Event:" + str(events) + u" and data:" + str(results))
@@ -760,9 +817,7 @@ class Plugin(indigo.PluginBase):
 
                 if eventactioned == False:
                     if self.debug5:  ## this is unknown events
-                        self.logger.debug(u"Event but not recognised:")
-                        self.logger.debug(str(events))
-                        self.logger.debug(str(fullstatus))
+                        self.logger.info(f"Event but not recognised: {events} & fullstatus: {fullstatus}")
 
         except:
             self.logger.debug(u"Exception in parseStateChange Broadcast")
@@ -789,6 +844,7 @@ class Plugin(indigo.PluginBase):
         alertDefrosting = False
         fanPWM = float(0)
         fanRPM = float(0)
+        amRunningFan = False
         IndoorUnitTemp = float(0)
         OutdoorUnitTemp = float(0)
         CompPower = float(0)
@@ -801,6 +857,7 @@ class Plugin(indigo.PluginBase):
         FanMode = ""
         quietMode = ""
         WorkingMode = ""
+        errorCode = "None"
         SystemSetpoint_Cool = float(0)
         SystemSetpoint_Heat = float(0)
         MainStatus = indigo.kHvacMode.Off
@@ -837,6 +894,10 @@ class Plugin(indigo.PluginBase):
                 alertDRED = jsonResponse['data']['Alerts']['DRED']
                 alertDefrosting = jsonResponse['data']['Alerts']['Defrosting']
             if 'LiveAircon' in jsonResponse['data']:
+                if 'ErrCode' in jsonResponse['data']['LiveAircon']:
+                    errorCode = "Error Code:" + str(jsonResponse['data']['LiveAircon']['ErrCode'])
+                if 'AmRunningFan' in jsonResponse['data']['LiveAircon']:
+                    amRunningFan = jsonResponse['data']['LiveAircon']['AmRunningFan']
                 if 'FanPWM' in jsonResponse['data']['LiveAircon']:
                     fanPWM = jsonResponse['data']['LiveAircon']['FanPWM']
                 if 'CompressorCapacity' in jsonResponse['data']['LiveAircon']:
@@ -1057,6 +1118,7 @@ class Plugin(indigo.PluginBase):
             {'key': 'alertDefrosting', 'value': alertDefrosting},
             {'key': 'indoorFanRPM', 'value': fanRPM},
             {'key': 'indoorFanPWM', 'value': fanPWM},
+            {'key': 'fanOn', 'value': amRunningFan},
             {'key': 'indoorUnitTemp', 'value': IndoorUnitTemp},
             {'key': 'outdoorUnitTemp', 'value': OutdoorUnitTemp},
             {'key': 'outdoorUnitPower', 'value': CompPower},
@@ -1069,6 +1131,7 @@ class Plugin(indigo.PluginBase):
             {'key': 'humidityInput1', 'value': main_humidity},
             {'key': 'quietMode', 'value': quietMode},
             {'key': 'fanSpeed', 'value': FanMode},
+            {'key': 'errorCode', 'value': errorCode},
             {'key': 'outdoorUnitFanSpeed', 'value': outdoorFanSpeed},
         ]
 
@@ -1418,7 +1481,7 @@ class Plugin(indigo.PluginBase):
     def getPairingToken(self,username, password):
 
         try:
-            self.logger.info( "Trying to connect using account username: %s" % username )
+            self.logger.info( "Connecting using account username: %s" % username )
             #self.logger.info("Connecting to %s" % address)
             url = 'https://que.actronair.com.au/api/v0/client/user-devices'
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0'}
@@ -1433,8 +1496,11 @@ class Plugin(indigo.PluginBase):
                 if 'pairingToken' in jsonResponse:
                     self.logger.debug(jsonResponse['pairingToken'])
                     pairingToken = jsonResponse['pairingToken']
+                    self.logger.info("Sucessfully connected and pairing Token received")
+
             else:
-                self.logger.error(str(r.text))
+                self.logger.debug(str(r.text))
+                self.logger.info(f"Error attempting to contect.  Given Error:{r.text}")
                 return ""
 
             ## pairingToken should exists
@@ -2014,7 +2080,6 @@ class Plugin(indigo.PluginBase):
     # Process action request from Indigo Server to change a cool/heat setpoint.
     def _handleChangeSetpointAction(self, dev, newSetpoint, logActionName, stateKey):
 
-
         self.logger.debug('_handleChangeSetpoint called: device'+str(dev.name)+" newSetpoint:"+str(newSetpoint)+ str(logActionName)+" "+str(stateKey))
 
         if dev.deviceTypeId == "queZone":
@@ -2087,6 +2152,8 @@ class Plugin(indigo.PluginBase):
     def sendCommand(self, accessToken, serialNo, commandtype, commandbody, repeats):
 
         self.logger.debug(u"Use Que for Command..")
+        if self.debug1:
+            self.logger.debug(f"SendCommand Debug:\n{accessToken=}\n{serialNo=}\n{commandtype=}\n{commandbody=}\n{repeats=}")
         item = QueCommand(accessToken, serialNo, commandtype, commandbody, repeats)
         if self.debug1:
             self.logger.debug(u'Putting Command item into Que: Item:' + str(item))
@@ -2209,11 +2276,9 @@ class Plugin(indigo.PluginBase):
 
 #### Actron Que Command Thread
     def threadCommand(self):
-
         self.logger.debug("ThreadCommand up and running...")
-
         while True:
-
+            self.sleep(0.5)
             try:
                 self.sleep(1)
                 item = self.que.get()   # blocks here until another que items
@@ -2288,13 +2353,9 @@ class Plugin(indigo.PluginBase):
                     self.logger.info("Request timedout to que.actron.com.au")
                     self.latestEventsConnectionError = True
                     self.sleep(1)
-                    return False
 
                 except:
                     self.logger.exception("Exception in send Command")
-                    return False
-
-
 
 
             except self.StopThread:
@@ -2360,10 +2421,10 @@ class Plugin(indigo.PluginBase):
         """
         self.debugLog(u"toggleDebugEnabled() method called.")
         if self.logLevel == logging.INFO:
-             self.logLevel = logging.DEBUG
+            self.logLevel = logging.DEBUG
+            self.indigo_log_handler.setLevel(self.logLevel)
 
-             self.indigo_log_handler.setLevel(self.logLevel)
-             indigo.server.log(u'Set Logging to DEBUG')
+            indigo.server.log(u'Set Logging to DEBUG')
         else:
             self.logLevel = logging.INFO
             indigo.server.log(u'Set Logging to INFO')
