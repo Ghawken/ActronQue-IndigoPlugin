@@ -526,7 +526,7 @@ class Plugin(indigo.PluginBase):
                        'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
                        'Authorization': 'Bearer ' + accessToken}
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
-            r = requests.get(url, headers=headers, timeout=10,verify=False)
+            r = requests.get(url, headers=headers, timeout=20,verify=False)
             if r.status_code != 200:
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(str(r.text))
@@ -1487,7 +1487,7 @@ class Plugin(indigo.PluginBase):
             headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0'}
             payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
 
-            r = requests.post(url, data=payload, headers=headers, timeout=10, verify=False)
+            r = requests.post(url, data=payload, headers=headers, timeout=20, verify=False)
             pairingToken =""
 
             if r.status_code==200:
@@ -1514,7 +1514,7 @@ class Plugin(indigo.PluginBase):
             payload2 = {'grant_type':'refresh_token', 'refresh_token':pairingToken, 'client_id':'app'}
             url2 = 'https://que.actronair.com.au/api/v0/oauth/token'
 
-            newr = requests.post(url2, data=payload2, headers=headers, timeout=10, verify=False)
+            newr = requests.post(url2, data=payload2, headers=headers, timeout=20, verify=False)
 
             accessToken = ""
             if newr.status_code==200:
