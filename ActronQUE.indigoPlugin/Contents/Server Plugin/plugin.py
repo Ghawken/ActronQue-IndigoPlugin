@@ -687,6 +687,10 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug( u"Updating Zone:" + str(foundzone.states['zoneName']) + u" with new Event:" + str( events) + u" and data:" + str(results))
                         foundzone.updateStateOnServer("currentTempHystersis", float(results))
                         eventactioned = True
+                    elif 'LiveHumidity_pc' in events:
+                        if self.debug4:
+                            self.logger.debug("Skipping LiveHumidity update")
+                        eventactioned = True
                 ## System Data
                 elif 'MasterInfo' in events:  ## system data
                     if 'LiveOutdoorTemp_oC' in events:
