@@ -1414,10 +1414,10 @@ class Plugin(indigo.PluginBase):
                                 maxheatsp = int(0)
                                 mincoolsp = int(0)
                                 minheatsp = int(0)
-
                                 sensorid =""
                                 ZoneStatus = indigo.kHvacMode.Off  ## Cool, HeatCool, Heat, Off
                                 zoneOpen = False
+
                                 if 'MaxCoolSetpoint' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     maxcoolsp = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['MaxCoolSetpoint']
                                 if 'MaxHeatSetpoint' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
@@ -1450,7 +1450,7 @@ class Plugin(indigo.PluginBase):
                                 # saver to user the enabled zone to set Mode.off and report Zoneposition for use
                                 if 'ZonePosition' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     ZonePosition = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['ZonePosition']
-
+                                    self.logger.debug(f"ZonePosition:{ZonePosition}")
                                 if listzonesopen[x]==True:
                                     if bool(isACturnedOn): ## AC Turned On may not be running
                                         ZoneStatus = MainStatus
@@ -1465,12 +1465,15 @@ class Plugin(indigo.PluginBase):
                                 else:
                                     ZoneStatus = indigo.kHvacMode.Off
 
-                                if int(ZonePosition) ==0:
+                                if int(ZonePosition) == 0 or listzonesopen[x]==False:
                                     zoneOpen = False
                                     percentageOpen = 0
+                                    ZonePosition = 0
+                                    self.logger.debug(f"{zoneOpen=} and {percentageOpen=}")
                                 else:
                                     zoneOpen = True
                                     percentageOpen = int(ZonePosition)*5
+                                    self.logger.debug(f"{zoneOpen=} and {percentageOpen=}")
 
                                 listzonetemps.append(livetemp)
                                 #if livehumidity > 0:
@@ -1765,15 +1768,19 @@ class Plugin(indigo.PluginBase):
                 ## need to turn on Zone
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", True, 0)
                 self.logger.info("Turning on Zone number "+str(zoneNumber))
-
+                zonedevice.updateStateOnServer("zoneisEnabled", True)
+                zonedevice.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
             elif zoneonoroff == "OFF":  ## need to turn AC off
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0)
                 self.logger.info("Turning off Zone number "+str(int(zoneNumber)+1))
-
+                zonedevice.updateStateOnServer("zoneisEnabled", True)
+                zonedevice.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
             elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off and (zoneonoroff == "OFF" or zoneonoroff=="TOGGLE"):
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0)
                 self.logger.info("Turning off Zone number "+str(int(zoneNumber)+1))
+                zonedevice.updateStateOnServer("zoneisEnabled", False)
+                zonedevice.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
 
         return
 
