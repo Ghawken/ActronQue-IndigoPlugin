@@ -91,12 +91,19 @@ class IndigoLogHandler(logging.Handler):
             indigo.server.log(f"Error in Logging: {ex}",type=self.displayName, isError=is_error, level=levelno)
 ################################################################################
 class QueCommand:
-    def __init__(self, accessToken, serialNo, commandtype, commandbody, commandrepeats):
+    def __init__(self, accessToken, serialNo, commandtype, commandbody, commandrepeats,
+                 deviceid=None, hvacOperationMode=None, setpointCool=None, setpointHeat=None, zoneActive=None):
         self.commandaccessToken = accessToken
         self.commandSerialNo = serialNo
         self.commandtype = commandtype
         self.commandbody = commandbody
         self.commandrepeats = commandrepeats
+
+        self.deviceid = deviceid
+        self.hvacOperationMode = hvacOperationMode
+        self.setpointCool = setpointCool
+        self.setpointHeat = setpointHeat
+        self.zoneActive = zoneActive
 
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
@@ -138,6 +145,7 @@ class Plugin(indigo.PluginBase):
         self.plugin_file_handler.setFormatter(pfmt)
 
         self.sendingCommand = False
+        self.sentCommand = False
         self.que = Queue()
         self.connected = False
         self.deviceUpdate = False
@@ -332,6 +340,7 @@ class Plugin(indigo.PluginBase):
                                     getlatestEventsTime = t.time() +4
                                 ## Add full system status check every 15 as getEvent incorrect.
                                 if t.time() > getfullSystemStatus:
+                                    self.getSystemStatus(dev, accessToken, serialNo)
                                     getfullSystemStatus = t.time() + 300
 
                 self.sleep(4)
@@ -346,6 +355,12 @@ class Plugin(indigo.PluginBase):
                     getlatestEventsTime = t.time() +60
                     self.latestEventsConnectionError = False  ## reset connection error here.
                     self.sendingCommand= False
+
+                if self.sentCommand:
+                    self.logger.debug(f"Command Successfully sent, running full System Update to update devices.")
+                    getfullSystemStatus = t.time() - 300  ## eg in past so run now!
+                    self.sentCommand = False
+
                 startingUp = False
 
         except self.StopThread:
@@ -2096,7 +2111,7 @@ class Plugin(indigo.PluginBase):
     # Process action request from Indigo Server to change main thermostat's main mode.
     def _handleChangeHvacModeAction(self, dev, newHvacMode):
         # Command hardware module (dev) to change the thermostat mode here:
-
+        self.logger.debug(f"_handleChangeHVAC Mode Called.  {newHvacMode=}")
         sendSuccess = False  # Set to False if it failed.
         actionStr = _lookupActionStrFromHvacMode(newHvacMode)
 
@@ -2124,14 +2139,17 @@ class Plugin(indigo.PluginBase):
             ## if a zone device needs different command
             ## probably best to be OFF or anything else
             zoneNumber = str(int(dev.states['zoneNumber'])-1)  # counts zones from zero
+
             if dev.states['hvacOperationMode'] == indigo.kHvacMode.Off and newHvacMode != indigo.kHvacMode.Off:
                 ## need to turn on Zone
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", True,0)
                 self.logger.info("Turning on Zone number "+str(zoneNumber))
-                newHvacMode = mainDevicehvacMode
-                actionStr = _lookupActionStrFromHvacMode(mainDevicehvacMode)
+                dev.updateStateOnServer("zoneisEnabled", True)
+                dev.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
             elif newHvacMode == indigo.kHvacMode.Off:  ## need to turn AC off
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False,0)
+                dev.updateStateOnServer("zoneisEnabled", False)
+                dev.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
                 self.logger.info("Turning off Zone number "+str(zoneNumber))
 
             if accessToken == "" or serialNo == "":
@@ -2240,76 +2258,6 @@ class Plugin(indigo.PluginBase):
         self.que.put(item)
         return
 
-        ##
-        ##Skip Below
-        ##$$
-        try:
-            self.logger.debug("Sending System Command for System Serial No %s" % serialNo)
-            self.logger.debug("Sending Command "+str(commandtype)+" and commandbody:"+str(commandbody)+ " and time command repeated:"+str(repeats))
-
-            if repeats>=5:
-                self.logger.info('Command failed after multiple repeats. Aborting.')
-                return False
-
-            # self.logger.info("Connecting to %s" % address)
-            url = 'https://que.actronair.com.au/api/v0/client/ac-systems/cmds/send?serial='+str(serialNo)
-            headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
-                       'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
-                       'Authorization': 'Bearer ' + accessToken}
-            payload = {"command": { commandtype : commandbody, "type":"set-settings"}}
-
-            self.logger.debug(str(payload))
-            r = requests.post(url, headers=headers,json=payload, timeout=15)
-            self.logger.debug(r.text)
-
-            if r.status_code != 200:
-                self.logger.debug("Error Message from get System Status.")
-                self.logger.debug(str(r.text))
-                repeats = repeats +1
-                if r.json() is None:
-                    self.logger.info("Nothing returned from Action API.  Aborting.")
-                    return
-
-                if 'type' in r.json():
-                    typereturned = str(r.json()['type'])
-                    self.logger.debug("Type returned and is "+str(typereturned))
-                    if typereturned=="timeout":
-                        self.logger.info("Timeout received from Actron API for System Command.  Will retry.")
-                        if int(repeats)<=5:
-                            self.sleep(5)
-                            return self.sendCommand(accessToken,serialNo,commandtype, commandbody, int(repeats))
-                        else:
-                            self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
-                            return False
-                # Authorisation may have failed/taken over
-                self.logger.debug("Recreating Tokens incase expired.  Another login and then retrying.")
-                self.checkMainDevices()
-                self.sleep(5)
-                if int(repeats)<=5:
-                    return self.sendCommand(accessToken, serialNo, commandtype, commandbody, int(repeats))
-                else:
-                    self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
-                    return False
-
-            if r.json() is not None:
-                if 'type' in r.json():
-                    typereturned = str(r.json()['type'])
-                    if typereturned == "ack":  ## command successful
-                        self.logger.debug("Received ack from API. Returning successful completion.")
-                        return True
-
-            return True
-
-
-        except requests.Timeout:
-            self.logger.info("Request timedout to que.actron.com.au")
-            self.sleep(1)
-            return False
-
-        except:
-            self.logger.exception("Exception in send Command")
-            return False
-
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
         self.debugLog(u"validateDeviceConfigUi called")
         # User choices look good, so return True (client will then close the dialog window).
@@ -2370,6 +2318,22 @@ class Plugin(indigo.PluginBase):
                 commandbody = item.commandbody
                 commandrepeats = item.commandrepeats
 
+                # Retrieve optional parameters
+                deviceid = item.deviceid
+                hvacOperationMode = item.hvacOperationMode  ##Main Oper Mode
+                setpointCool = item.setpointCool
+                setpointHeat = item.setpointHeat
+                zoneActive = item.zoneActive
+
+                self.logger.debug(
+                    "Optional parameters: deviceid=%s, hvacOperationMode=%s, setpointCool=%s, setpointHeat=%s",
+                    deviceid,
+                    hvacOperationMode,
+                    setpointCool,
+                    setpointHeat,
+
+                )
+
                 try:
                     self.logger.debug("Sending System Command for System Serial No %s" % commandSerialNo)
                     self.logger.debug("Sending Command " + str(commandtype) + " and commandbody:" + str(
@@ -2423,7 +2387,21 @@ class Plugin(indigo.PluginBase):
                             typereturned = str(r.json()['type'])
                             if typereturned == "ack":  ## command successful
                                 self.logger.info("Command ack successfully by QUE. Returning successful completion.")
-
+                                self.sentCommand = True  ## Successfully command sent.
+                                # If deviceid and hvacOperationMode are provided, update Indigo device state.
+                                # if deviceid is not None and hvacOperationMode is not None:
+                                #     try:
+                                #         device = indigo.devices[int(deviceID)]
+                                #         if device.deviceTypeId == "queZone":
+                                #             if str(zoneActive) == "True":
+                                #                 zones.updateStateOnServer("zoneisEnabled", True)
+                                #                 currentMode = item.hvacOperationMode
+                                #                 zones.updateStateOnServer('hvacOperationMode', currentMode)
+                                #             elif str(zoneActive) == "False":
+                                #                 zones.updateStateOnServer("zoneisEnabled", False)
+                                #                 zones.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
+                                #     except:
+                                #         self.logger.debug(f"Exception Caught in Command Update", exc_info=True)
 
                     self.sendingCommand = False
                     self.latestEventsConnectionError = False
