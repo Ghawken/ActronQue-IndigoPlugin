@@ -1465,7 +1465,7 @@ class Plugin(indigo.PluginBase):
                                 else:
                                     ZoneStatus = indigo.kHvacMode.Off
 
-                                if int(ZonePosition) == 0 or listzonesopen[x]==False:
+                                if int(ZonePosition) == 0 or listzonesopen[x] == False:
                                     zoneOpen = False
                                     percentageOpen = 0
                                     ZonePosition = 0
