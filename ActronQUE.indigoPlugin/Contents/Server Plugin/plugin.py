@@ -6,7 +6,9 @@ Author: GlennNZ
 
 """
 
-import datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import time as t
 import os
 import shutil
@@ -552,13 +554,18 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("First Run of Latest Events: Skipping updating once.")
                 return
             timestamp = ""
+            if self.debug4:
+                self.logger.debug(f"Full Events:\n{self.safe_json_dumps(eventslist)}")
             for events in reversed(eventslist):
                 if self.debug4:
-                    self.logger.debug(u'event:'+str(events))
+                    self.logger.debug(f'event:\n{self.safe_json_dumps(events)}')
                 if events['type']=='full-status-broadcast':
                     if self.debug4:
-                        self.logger.debug("Full Status BroadCase Found")
-                    self.parseFullStatusBroadcast(device, serialNo, events)
+                        self.logger.debug("*** Full Status BroadCast Found  ***  Checking Whether this is recent or old..")
+                    if self.is_event_timestamp_close(events['timestamp'], 30):
+                        self.parseFullStatusBroadcast(device, serialNo, events)
+                    else:
+                        self.logger.debug("Full Status BroadCast Found - However old.  Ignored. ")
                 elif events['type']=="status-change-broadcast":
                     #if self.debug4:
                         #self.logger.debug("Status Change Broadcast")
@@ -598,6 +605,65 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Error Latest Events from Actron API" + str(e.message))
             self.latestEventsConnectionError = True
 
+    def is_event_timestamp_close(self, event_timestamp: str, allowed_diff_minutes: float) -> bool:
+        """
+        Check if the event's broadcast timestamp is within allowed_diff_minutes of the current system time
+        in Australia/Sydney local time.
+        :param event_timestamp: The ISO-formatted timestamp from the event.
+        :param allowed_diff_minutes: Allowed time difference in minutes.
+        :return: True if the event timestamp is within the allowed difference from current time, else False.
+        """
+        try:
+            # Attempt to fix the timestamp if microseconds have more than 6 digits.
+            ts_fixed = event_timestamp
+            dot_index = event_timestamp.find('.')
+            if dot_index != -1:
+                # Determine the index where the timezone info starts.
+                tz_index = event_timestamp.find('+', dot_index)
+                if tz_index == -1:
+                    tz_index = event_timestamp.find('-', dot_index)
+                if tz_index == -1:
+                    tz_index = len(event_timestamp)
+                microseconds = event_timestamp[dot_index + 1:tz_index]
+                if len(microseconds) > 6:
+                    microseconds = microseconds[:6]
+                    ts_fixed = event_timestamp[:dot_index + 1] + microseconds + event_timestamp[tz_index:]
+
+           # Parse the (possibly corrected) timestamp into a datetime object.
+            dt = datetime.fromisoformat(ts_fixed)
+            # Convert the event timestamp to the system's local timezone.
+            dt_local = dt.astimezone()
+            # Get the current system time as a timezone-aware datetime.
+            current_local = datetime.now().astimezone()
+            # Log both the broadcast timestamp (converted to local) and the current system time.
+            self.logger.debug(f"Broadcast timestamp (local): {dt_local}, Current system time: {current_local}")
+            # Compute the absolute difference in minutes.
+            diff_minutes = abs((current_local - dt_local).total_seconds() / 60.0)
+            self.logger.debug(f"Difference in minutes: {diff_minutes}")
+            # Return True if the time difference is within the allowed limit.
+            return diff_minutes <= allowed_diff_minutes
+        except Exception as e:
+            self.logger.error("Error in is_event_timestamp_close: %s", e)
+            return False
+## JSON logging
+    def safe_json_dumps(self, obj, fallback=str, **kwargs):
+        """
+        Convert an object to a JSON string using json.dumps.
+        If conversion fails, log the error and return a fallback representation.
+
+        :param obj: The object to convert.
+        :param fallback: Fallback function (defaults to str) if conversion fails.
+        :param kwargs: Additional arguments for json.dumps.
+        :return: A JSON string or a fallback representation.
+        """
+        try:
+            return json.dumps(obj, **kwargs)
+        except Exception as e:
+            self.logger.error("Error converting to JSON: %s", e)
+            return fallback(obj)
+
+
+
     def parsestatusChangeBroadcast(self,device, serialNo,fullstatus):
        # if self.debug4:
         #    self.logger.debug('parsing status change broadcast')
@@ -605,7 +671,7 @@ class Plugin(indigo.PluginBase):
             for events in fullstatus:
                 eventactioned = False
                 if self.debug4:
-                    self.logger.debug("event:"+str(events)+ " result:"+str(fullstatus[events]))
+                    self.logger.debug(f"events:\n{events} result:\n{self.safe_json_dumps(fullstatus[events])}")
                 results = fullstatus[events]
 
                 if 'SystemStatus_Local.LastScreenTouch_UTC' in events:
@@ -689,7 +755,11 @@ class Plugin(indigo.PluginBase):
                         eventactioned = True
                     elif 'LiveHumidity_pc' in events:
                         if self.debug4:
-                            self.logger.debug("Skipping LiveHumidity update")
+                            self.logger.debug(
+                                u"Updating Zone: Humidity" + str(foundzone.states['zoneName']) + u" with new Event:" + str(
+                                    events) + u" and data:" + str(results))
+                        foundzone.updateStateOnServer("HumidityInput1", float(results))
+                        foundzone.updateStateOnServer("currentHumidity", float(results))
                         eventactioned = True
                 ## System Data
                 elif 'MasterInfo' in events:  ## system data
@@ -997,7 +1067,7 @@ class Plugin(indigo.PluginBase):
                         if int(dev.states["zoneNumber"]) - 1 == int(x):
                             # if dev.states["zoneName"] == jsonResponse['data']['RemoteZoneInfo'][x]['NV_Title']:
                             canoperate = False
-                            # livehumidity = float(0)
+                            livehumidity = float(0)
                             liveTemphys = float(0)
                             livetemp = float(0)
                             tempsetpointcool = float(0)
@@ -1023,8 +1093,8 @@ class Plugin(indigo.PluginBase):
                                 minheatsp = jsonResponse['data']['RemoteZoneInfo'][x]['MinHeatSetpoint']
                             if 'CanOperate' in jsonResponse['data']['RemoteZoneInfo'][x]:
                                 canoperate = jsonResponse['data']['RemoteZoneInfo'][x]['CanOperate']
-                            # if 'LiveHumidity_pc' in jsonResponse['data']['RemoteZoneInfo'][x]:
-                            #     livehumidity = jsonResponse['data']['RemoteZoneInfo'][x]['LiveHumidity_pc']
+                            if 'LiveHumidity_pc' in jsonResponse['data']['RemoteZoneInfo'][x]:
+                                 livehumidity = jsonResponse['data']['RemoteZoneInfo'][x]['LiveHumidity_pc']
                             if 'LiveTemp_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
                                 livetemp = jsonResponse['data']['RemoteZoneInfo'][x]['LiveTemp_oC']
                             if 'LiveTempHysteresis_oC' in jsonResponse['data']['RemoteZoneInfo'][x]:
@@ -1079,7 +1149,8 @@ class Plugin(indigo.PluginBase):
                                 {'key': 'canOperate', 'value': canoperate},
                                 {'key': 'currentTemp', 'value': livetemp},
                                 {'key': 'temperatureInput1', 'value': livetemp},
-                                # {'key': 'humidityInput1', 'value': livehumidity},
+                                {'key': 'humidityInput1', 'value': livehumidity},
+                                {'key': 'currentHumidity', 'value': livehumidity},
                                 {'key': 'currentTempHystersis', 'value': liveTemphys},
                                 {'key': 'zonePercentageOpen', 'value': percentageOpen},
                                 {'key': 'sensorBattery', 'value': sensorbattery},
@@ -1313,7 +1384,7 @@ class Plugin(indigo.PluginBase):
                             if int(dev.states["zoneNumber"])-1 == int(x):
                             #if dev.states["zoneName"] == jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['NV_Title']:
                                 canoperate = False
-                                #livehumidity = float(0)
+                                livehumidity = float(0)
                                 liveTemphys = float(0)
                                 livetemp = float(0)
                                 tempsetpointcool = float(0)
@@ -1339,8 +1410,8 @@ class Plugin(indigo.PluginBase):
                                     minheatsp = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['MinHeatSetpoint']
                                 if 'CanOperate' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     canoperate = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['CanOperate']
-                               # if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
-                               #     livehumidity = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveHumidity_pc']
+                                if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
+                                    livehumidity = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveHumidity_pc']
                                 if 'LiveTemp_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     livetemp = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveTemp_oC']
                                 if 'LiveTempHysteresis_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
@@ -1390,7 +1461,8 @@ class Plugin(indigo.PluginBase):
                                     {'key': 'canOperate', 'value': canoperate},
                                     {'key': 'currentTemp', 'value': livetemp},
                                     {'key': 'temperatureInput1', 'value': livetemp},
-                                   # {'key': 'humidityInput1', 'value': livehumidity},
+                                    {'key': 'humidityInput1', 'value': livehumidity},
+                                    {'key': 'currentHumidity', 'value': livehumidity},
                                     {'key': 'currentTempHystersis', 'value': liveTemphys},
                                     {'key': 'zonePercentageOpen', 'value': percentageOpen},
                                     {'key': 'sensorBattery', 'value': sensorbattery},
@@ -2255,7 +2327,7 @@ class Plugin(indigo.PluginBase):
             if device.deviceTypeId == "queZone":
                 newProps["SupportsCoolSetpoint"] = True
                 newProps["SupportsHeatSetpoint"] = True
-                newProps["NumHumidityInputs"] = 0
+                newProps["NumHumidityInputs"] = 1
             device.replacePluginPropsOnServer(newProps)
         except:
             self.logger.exception("Exception in DeviceStartComm")

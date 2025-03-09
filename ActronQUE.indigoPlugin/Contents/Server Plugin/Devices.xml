@@ -216,6 +216,11 @@
                 <TriggerLabel>Current Temp</TriggerLabel>
                 <ControlPageLabel>Current Temp</ControlPageLabel>
             </State>
+             <State id="currentHumidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Humidity</TriggerLabel>
+                <ControlPageLabel>Current Humidity</ControlPageLabel>
+            </State>
             <State id="currentTempHystersis">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Current Temp Hystersis</TriggerLabel>
