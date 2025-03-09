@@ -330,6 +330,9 @@ class Plugin(indigo.PluginBase):
                                 if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
                                     self.getlatestEvents(dev, accessToken,serialNo)
                                     getlatestEventsTime = t.time() +4
+                                ## Add full system status check every 15 as getEvent incorrect.
+                                if t.time() > getfullSystemStatus:
+                                    getfullSystemStatus = t.time() + 300
 
                 self.sleep(4)
                 if t.time() > updateAccessToken:
@@ -555,14 +558,14 @@ class Plugin(indigo.PluginBase):
                 return
             timestamp = ""
             if self.debug4:
-                self.logger.debug(f"Full Events:\n{self.safe_json_dumps(eventslist)}")
+                self.logger.debug(f"Full Events:{self.safe_json_dumps(eventslist)}")
             for events in reversed(eventslist):
                 if self.debug4:
                     self.logger.debug(f'event:\n{self.safe_json_dumps(events)}')
                 if events['type']=='full-status-broadcast':
                     if self.debug4:
                         self.logger.debug("*** Full Status BroadCast Found  ***  Checking Whether this is recent or old..")
-                    if self.is_event_timestamp_close(events['timestamp'], 30):
+                    if self.is_event_timestamp_close(events['timestamp'], 15):
                         self.parseFullStatusBroadcast(device, serialNo, events)
                     else:
                         self.logger.debug("Full Status BroadCast Found - However old.  Ignored. ")
@@ -608,7 +611,7 @@ class Plugin(indigo.PluginBase):
     def is_event_timestamp_close(self, event_timestamp: str, allowed_diff_minutes: float) -> bool:
         """
         Check if the event's broadcast timestamp is within allowed_diff_minutes of the current system time
-        in Australia/Sydney local time.
+        in System local time.
         :param event_timestamp: The ISO-formatted timestamp from the event.
         :param allowed_diff_minutes: Allowed time difference in minutes.
         :return: True if the event timestamp is within the allowed difference from current time, else False.
@@ -758,8 +761,8 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug(
                                 u"Updating Zone: Humidity" + str(foundzone.states['zoneName']) + u" with new Event:" + str(
                                     events) + u" and data:" + str(results))
-                        foundzone.updateStateOnServer("HumidityInput1", float(results))
-                        foundzone.updateStateOnServer("currentHumidity", float(results))
+                        foundzone.updateStateOnServer("HumidityInput1", round(float(results),3))
+                        foundzone.updateStateOnServer("currentHumidity", round(float(results),3))
                         eventactioned = True
                 ## System Data
                 elif 'MasterInfo' in events:  ## system data
@@ -1412,6 +1415,7 @@ class Plugin(indigo.PluginBase):
                                     canoperate = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['CanOperate']
                                 if 'LiveHumidity_pc' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     livehumidity = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveHumidity_pc']
+                                    livehumidity = round(float(livehumidity),3)
                                 if 'LiveTemp_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
                                     livetemp = jsonResponse['lastKnownState']['RemoteZoneInfo'][x]['LiveTemp_oC']
                                 if 'LiveTempHysteresis_oC' in jsonResponse['lastKnownState']['RemoteZoneInfo'][x]:
