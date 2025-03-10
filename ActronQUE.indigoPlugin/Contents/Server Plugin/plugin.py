@@ -587,10 +587,12 @@ class Plugin(indigo.PluginBase):
                 elif events['type']=="status-change-broadcast":
                     #if self.debug4:
                         #self.logger.debug("Status Change Broadcast")
-                    self.parsestatusChangeBroadcast(device,serialNo,events['data'])
-                    #self.logger.error(str(events))
+                    if self.is_event_timestamp_close(events['timestamp'], 5):
+                        self.parsestatusChangeBroadcast(device,serialNo,events['data'])
+                    else:
+                        self.logger.error(f"Ignoring parsed Event as more than 15 minutes old.")
                 #self.logger.debug(u'event id:'+events['id'])
-                timestamp = events['timestamp']
+                #timestamp = events['timestamp']
            # self.logger.error(str(timestamp))
             return
         except requests.exceptions.ReadTimeout as e:
