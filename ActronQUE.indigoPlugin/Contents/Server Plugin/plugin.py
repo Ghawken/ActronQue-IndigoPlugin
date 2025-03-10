@@ -590,7 +590,7 @@ class Plugin(indigo.PluginBase):
                     if self.is_event_timestamp_close(events['timestamp'], 5):
                         self.parsestatusChangeBroadcast(device,serialNo,events['data'])
                     else:
-                        self.logger.error(f"Ignoring parsed Event as more than 15 minutes old.")
+                        self.logger.debug(f"Ignoring parsed Event as more than 15 minutes old.")
                 #self.logger.debug(u'event id:'+events['id'])
                 #timestamp = events['timestamp']
            # self.logger.error(str(timestamp))
