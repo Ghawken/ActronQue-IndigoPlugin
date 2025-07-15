@@ -312,11 +312,12 @@ class Plugin(indigo.PluginBase):
                 for dev in indigo.devices.itervalues(filter="self"):
                     if dev.deviceTypeId == "ActronQueMain":
                         accessToken = dev.pluginProps['accessToken']
+                        nimbus_accessToken = dev.pluginProps['nimbus_accessToken']
                         serialNo = dev.pluginProps['serialNo']
                         systemcheckonly = dev.pluginProps.get('systemcheckonly', False)
                         if accessToken == "" or accessToken == None:
                             self.logger.info("Failed to get Access Token.  ")
-                            self.logger.info("May be expired token, or Actron API system isues.")
+                            self.logger.info("May be expired token, or Actron API system issues.")
                             self.sleep(10)
                             updateAccessToken = t.time() + 2
                             continue
@@ -336,7 +337,9 @@ class Plugin(indigo.PluginBase):
                                     getfullSystemStatus = t.time()+ 300
                             else:  ## disabled use latest Events..
                                 if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
-                                    self.getlatestEvents(dev, accessToken,serialNo)
+                                    # Move to Nimbus server token and events given Que has failed.
+                                    self.get_nimbuslatestEvents(dev, nimbus_accessToken, serialNo)
+                                    #self.getlatestEvents(dev, accessToken,serialNo)
                                     getlatestEventsTime = t.time() +4
                                 ## Add full system status check every 15 as getEvent incorrect.
                                 if t.time() > getfullSystemStatus:
@@ -387,7 +390,16 @@ class Plugin(indigo.PluginBase):
                     else:
                         self.logger.info("Unable to get Access Token, check username, Password")
                         return
-
+                    dev.replacePluginPropsOnServer(localPropscopy)
+                    # add login to nimbus given que endopoint issues
+                    nimbus_accessToken = self.get_nimbusPairingToken(username,password)
+                    if nimbus_accessToken != "" and nimbus_accessToken != None:
+                        localPropscopy['nimbus_accessToken'] = nimbus_accessToken
+                        self.logger.debug("Updated device pluginProps with Access Token:")
+                    else:
+                        self.logger.info("Unable to get Nimbus Access Token, check username, Password")
+                        return
+                    dev.replacePluginPropsOnServer(localPropscopy)
                     serialNo = self.getACsystems(accessToken)
                     if serialNo != "":
                         localPropscopy['serialNo']=serialNo
@@ -516,6 +528,117 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(str(valuesDict))
         return
 
+    def get_nimbuslatestEvents(self, device, accessToken, serialNo):
+        try:
+            if accessToken == None or accessToken == "":
+                self.logger.debug("Access token nil.  Aborting")
+                return
+            if serialNo == None or serialNo == "":
+                self.logger.debug("Blank Serial No. still Empty skipping getLatestEvents currently")
+                return
+            skippingparsing = False
+            lasteventid = self.latestevents.get(device.id, "A")
+            # if no last event or device is Offline pull all events.
+
+            # will give KeyError if blank, use get to avoid, use A pulls all
+            #  if self.debug4:
+            #       self.logger.debug("Getting Latest Events for System Serial No %s" % serialNo)
+            #       self.logger.debug(u"LastEventID: " + str(lasteventid))
+            # self.logger.info("Connecting to %s" % address)
+            # url = 'https://que.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
+            if lasteventid == "A":
+                url = 'https://nimbus.actronair.com.au/api/v0/client/ac-systems/events/latest?serial=' + str(serialNo)
+                # don't parse this info - just re-do the system state already received.
+                # skip.
+                skippingparsing = True
+            else:
+                url = 'https://nimbus.actronair.com.au/api/v0/client/ac-systems/events/newer?serial=' + str(
+                    serialNo) + '&newerThanEventId=' + str(lasteventid)
+            #     self.logger.debug(str(url))
+            headers = {'Host': 'nimbus.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
+                       'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
+                       'Authorization': 'Bearer ' + accessToken}
+            # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
+            r = requests.get(url, headers=headers, timeout=20, verify=False)
+            if r.status_code != 200:
+                self.logger.info("Error Message from get Latest Events")
+                self.logger.debug(str(r.text))
+                if 'Authorization has been denied' in r.text:
+                    self.logger.info("Failed authentication for Events, likely expired, or multiple log ins.")
+                    self.logger.info("Regenerating Token for access.")
+                    self.sleep(3)
+                    self.checkMainDevices()
+                return
+            # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
+            # self.logger.debug(str(r.text))
+
+            jsonResponse = json.loads(r.text, object_pairs_hook=OrderedDict)
+
+            # jsonResponse = r.json(object_pairs_hook=OrderedDict)
+            if "events" in jsonResponse:
+                eventslist = jsonResponse['events']
+                if len(eventslist) > 0:
+                    self.latestevents[device.id] = eventslist[0]['id']
+                    # self.logger.error(str(eventslist[0]))
+
+            if skippingparsing:
+                self.logger.info("First Run of Latest Events: Skipping updating once.")
+                return
+            timestamp = ""
+            if self.debug4:
+                self.logger.debug(f"Full Events:{self.safe_json_dumps(eventslist)}")
+            for events in reversed(eventslist):
+                if self.debug4:
+                    self.logger.debug(f'event:\n{self.safe_json_dumps(events)}')
+                if events['type'] == 'full-status-broadcast':
+                    if self.debug4:
+                        self.logger.debug(
+                            "*** Full Status BroadCast Found  ***  Checking Whether this is recent or old..")
+                    if self.is_event_timestamp_close(events['timestamp'], 15):
+                        self.parseFullStatusBroadcast(device, serialNo, events)
+                    else:
+                        self.logger.debug("Full Status BroadCast Found - However old.  Ignored. ")
+                elif events['type'] == "status-change-broadcast":
+                    # if self.debug4:
+                    # self.logger.debug("Status Change Broadcast")
+                    if self.is_event_timestamp_close(events['timestamp'], 5):
+                        self.parsestatusChangeBroadcast(device, serialNo, events['data'])
+                    else:
+                        self.logger.debug(f"Ignoring parsed Event as more than 15 minutes old.")
+                # self.logger.debug(u'event id:'+events['id'])
+                # timestamp = events['timestamp']
+            # self.logger.error(str(timestamp))
+            return
+        except requests.exceptions.ReadTimeout as e:
+            self.logger.debug("ReadTimeout with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+        except requests.exceptions.Timeout as e:
+            self.logger.debug("Timeout with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+        except requests.exceptions.ConnectionError as e:
+            self.logger.debug("ConnectionError with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+        except requests.exceptions.ConnectTimeout as e:
+            self.logger.debug("Connect Timeout with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+        except requests.exceptions.HTTPError as e:
+            self.logger.debug("HttpError with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+        except requests.exceptions.SSLError as e:
+            self.logger.debug("SSL with get Latest Events from Actron API:" + str(e))
+            self.latestEventsConnectionError = True
+            return
+
+        except Exception as e:
+            self.logger.exception("Error getting Latest Events from Actron API : " + repr(e))
+            self.logger.debug("Error Latest Events from Actron API" + str(e.message))
+            self.latestEventsConnectionError = True
+
     def getlatestEvents(self, device, accessToken, serialNo):
         try:
             if accessToken == None or accessToken == "":
@@ -551,7 +674,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("Error Message from get Latest Events")
                 self.logger.debug(str(r.text))
                 if 'Authorization has been denied' in r.text:
-                    self.logger.info("Failed authenication for Events, likely expired, or multiple log ins.")
+                    self.logger.info("Failed authentication for Events, likely expired, or multiple log ins.")
                     self.logger.info("Regenerating Token for access.")
                     self.sleep(3)
                     self.checkMainDevices()
@@ -1576,6 +1699,67 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Error connecting" + str(e))
             self.sleep(15)
             return "blank"
+
+# Get Nimbus end point token
+
+
+    def get_nimbusPairingToken(self,username, password):
+
+        try:
+            self.logger.info( "Connecting using account username: %s" % username )
+            #self.logger.info("Connecting to %s" % address)
+            url = 'https://nimbus.actronair.com.au/api/v0/client/user-devices'
+            headers = {'Host': 'nimbus.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au','User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0'}
+            payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
+
+            r = requests.post(url, data=payload, headers=headers, timeout=20, verify=False)
+            pairingToken =""
+
+            if r.status_code==200:
+                self.logger.debug(str(r.text))
+                jsonResponse = r.json()
+                if 'pairingToken' in jsonResponse:
+                    self.logger.debug(jsonResponse['pairingToken'])
+                    pairingToken = jsonResponse['pairingToken']
+                    self.logger.info("Sucessfully connected and pairing Token received")
+
+            else:
+                self.logger.debug(str(r.text))
+                self.logger.info(f"Error attempting to contect.  Given Error:{r.text}")
+                return ""
+
+            ## pairingToken should exists
+            if pairingToken=="":
+                self.logger.info("No pairing Token received?  Ending.")
+                return ""
+
+            ## now get bearer token
+            ## will need to save these for each main device
+
+            payload2 = {'grant_type':'refresh_token', 'refresh_token':pairingToken, 'client_id':'app'}
+            url2 = 'https://nimbus.actronair.com.au/api/v0/oauth/token'
+
+            newr = requests.post(url2, data=payload2, headers=headers, timeout=20, verify=False)
+
+            accessToken = ""
+            if newr.status_code==200:
+                self.logger.debug(str(newr.text))
+                jsonResponse = newr.json()
+                if 'access_token' in jsonResponse:
+                    self.logger.debug(jsonResponse['access_token'])
+                    accessToken = jsonResponse['access_token']
+            ## pairingToken should exists
+            if accessToken=="":
+                self.logger.info("No Access Token received?  Ending.")
+                return ""
+            self.connected = True
+            return accessToken
+
+        except Exception as e:
+            self.logger.debug("Error getting Pairing Token : ",exc_info=True)
+            self.sleep(30)
+            self.connected = False
+            return ""
 
 
     def getPairingToken(self,username, password):
