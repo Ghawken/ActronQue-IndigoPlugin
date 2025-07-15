@@ -340,7 +340,7 @@ class Plugin(indigo.PluginBase):
                                     # Move to Nimbus server token and events given Que has failed.
                                     self.get_nimbuslatestEvents(dev, nimbus_accessToken, serialNo)
                                     #self.getlatestEvents(dev, accessToken,serialNo)
-                                    getlatestEventsTime = t.time() +4
+                                    getlatestEventsTime = t.time() + 20
                                 ## Add full system status check every 15 as getEvent incorrect.
                                 if t.time() > getfullSystemStatus:
                                     self.getSystemStatus(dev, accessToken, serialNo)
@@ -390,6 +390,7 @@ class Plugin(indigo.PluginBase):
                     else:
                         self.logger.info("Unable to get Access Token, check username, Password")
                         return
+
                     dev.replacePluginPropsOnServer(localPropscopy)
                     # add login to nimbus given que endopoint issues
                     nimbus_accessToken = self.get_nimbusPairingToken(username,password)
@@ -400,6 +401,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.info("Unable to get Nimbus Access Token, check username, Password")
                         return
                     dev.replacePluginPropsOnServer(localPropscopy)
+
                     serialNo = self.getACsystems(accessToken)
                     if serialNo != "":
                         localPropscopy['serialNo']=serialNo
@@ -1376,6 +1378,8 @@ class Plugin(indigo.PluginBase):
             if r.status_code != 200:
                 self.logger.info("Error Message from get System Status")
                 self.logger.debug(str(r.text))
+                self.sleep(5)
+                self.checkMainDevices()
                 return "blank"
 # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
             self.logger.debug(str(r.text))
