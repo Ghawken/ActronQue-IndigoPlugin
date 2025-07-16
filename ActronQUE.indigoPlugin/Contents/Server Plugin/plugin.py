@@ -158,6 +158,9 @@ class Plugin(indigo.PluginBase):
         self.ip150password = self.pluginPrefs.get('ip150password', 'paradox')
         self.pcpassword = self.pluginPrefs.get('pcpassword', 1234)
 
+
+        self.command_just_run = False
+
         self.labelsdueupdate = True
         self.debug1 = self.pluginPrefs.get('debug1', False)
         self.debug2 = self.pluginPrefs.get('debug2', False)
@@ -338,15 +341,16 @@ class Plugin(indigo.PluginBase):
                             else:  ## disabled use latest Events..
                                 if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
                                     # Move to Nimbus server token and events given Que has failed.
-                                    self.get_nimbuslatestEvents(dev, nimbus_accessToken, serialNo)
+                                    #self.get_nimbuslatestEvents(dev, nimbus_accessToken, serialNo)
                                     #self.getlatestEvents(dev, accessToken,serialNo)
-                                    getlatestEventsTime = t.time() + 20
+                                    getlatestEventsTime = t.time() + 30
+                                    self.getSystemStatus(dev, accessToken, serialNo)
                                 ## Add full system status check every 15 as getEvent incorrect.
                                 if t.time() > getfullSystemStatus:
                                     self.getSystemStatus(dev, accessToken, serialNo)
-                                    getfullSystemStatus = t.time() + 300
+                                    getfullSystemStatus = t.time() + 305
 
-                self.sleep(4)
+                self.sleep(2)
                 if t.time() > updateAccessToken:
                     self.logger.info("Updating Access Token as Failed to connect or 24 hours has passed")
                     self.checkMainDevices()
@@ -393,14 +397,14 @@ class Plugin(indigo.PluginBase):
 
                     dev.replacePluginPropsOnServer(localPropscopy)
                     # add login to nimbus given que endopoint issues
-                    nimbus_accessToken = self.get_nimbusPairingToken(username,password)
-                    if nimbus_accessToken != "" and nimbus_accessToken != None:
-                        localPropscopy['nimbus_accessToken'] = nimbus_accessToken
-                        self.logger.debug("Updated device pluginProps with Access Token:")
-                    else:
-                        self.logger.info("Unable to get Nimbus Access Token, check username, Password")
-                        return
-                    dev.replacePluginPropsOnServer(localPropscopy)
+                   # nimbus_accessToken = self.get_nimbusPairingToken(username,password)
+                   # if nimbus_accessToken != "" and nimbus_accessToken != None:
+                   #     localPropscopy['nimbus_accessToken'] = nimbus_accessToken
+                   #     self.logger.debug("Updated device pluginProps with Access Token:")
+                   # else:
+                   #     self.logger.info("Unable to get Nimbus Access Token, check username, Password")
+                   #     return
+                   # dev.replacePluginPropsOnServer(localPropscopy)
 
                     serialNo = self.getACsystems(accessToken)
                     if serialNo != "":
