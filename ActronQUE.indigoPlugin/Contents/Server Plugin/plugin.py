@@ -1199,12 +1199,16 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("isACturnedOn doesn't exit... skipping On/Off/Mode update.")
 
             if 'RemoteZoneInfo' in jsonResponse['data']:
+                zones = jsonResponse['lastKnownState']['RemoteZoneInfo'] or []
                 for x in range(0, 8):
                     ## go through all zones
-                    self.logger.debug("Zone Number:" + str(x))
+                    zone = zones[x]
+                    self.logger.debug("Zone Number: %s", x)
+                    self.logger.debug("%r", zone)
                     self.logger.debug(jsonResponse['data']['RemoteZoneInfo'][x])
-                    if 'NV_Title' in jsonResponse['data']['RemoteZoneInfo'][x]:
-                        zonenames = zonenames + jsonResponse['data']['RemoteZoneInfo'][x]['NV_Title'] + ","
+                    # zone can be None or not a dict
+                    if isinstance(zone, dict) and 'NV_Title' in zone:
+                        zonenames = zonenames + zone['NV_Title'] + ","
                     self.logger.debug(str(zonenames))
 
                     for dev in indigo.devices.itervalues('self.queZone'):
@@ -1518,6 +1522,38 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("isACturnedOn doesn't exit... skipping On/Off/Mode update.")
 
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
+                    async def start_washing(self) -> None:
+                        if not self._device:
+                            raise RuntimeError("Not connected")
+                        _LOGGER.debug("start_washing() called")
+                        await self._run(self._device.start_washing)
+
+                    async def pause_washing(self) -> None:
+                        if not self._device:
+                            raise RuntimeError("Not connected")
+                        _LOGGER.debug("pause_washing() called")
+                        await self._run(self._device.pause_washing)
+
+                    async def start_drying(self) -> None:
+                        if not self._device:
+                            raise RuntimeError("Not connected")
+                        _LOGGER.debug("start_drying() called")
+                        await self._run(self._device.start_drying)
+
+                    async def stop_drying(self) -> None:
+                        if not self._device:
+                            raise RuntimeError("Not connected")
+                        _LOGGER.debug("stop_drying() called")
+                        await self._run(self._device.stop_drying)
+
+                    async def start_draining(self, clean_water_tank: bool = False) -> None:
+                        """
+                        Start drainage; if clean_water_tank is True, also empty clean tank when supported.
+                        """
+                        if not self._device:
+                            raise RuntimeError("Not connected")
+                        _LOGGER.debug("start_draining(clean_water_tank=%r) called", clean_water_tank)
+                        await self._run(self._device.start_draining, clean_water_tank)
                     for x in range (0,8):
                         ## go through all zones
                         self.logger.debug("Zone Number:"+str(x))
