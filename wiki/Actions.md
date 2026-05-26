@@ -8,6 +8,7 @@ The plugin exposes dedicated Action Group actions for controlling the AC system,
 
 ## Plugin-Specific Actions
 
+
 These actions appear under the **Actron QUE AC** plugin section in Indigo's Action Group editor.
 
 ---
