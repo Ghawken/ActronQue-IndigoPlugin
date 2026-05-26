@@ -1,55 +1,116 @@
-# Actron Que AC IndigoPlugin
+![ActronQue Indigo Plugin](https://raw.githubusercontent.com/Ghawken/ActronQue-IndigoPlugin/master/Images/banner.png)
 
-![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/icon400.png?raw=true)
+# ActronQue — Indigo Plugin
 
-Indigodomo Plugin for Actron Que Ducted AC Sytems
+[![Version](https://img.shields.io/badge/version-0.6.56-blue)](https://github.com/Ghawken/ActronQue-IndigoPlugin/releases)
+[![Indigo](https://img.shields.io/badge/Indigo-2022.1%2B-green)](https://www.indigodomo.com)
+[![Python](https://img.shields.io/badge/Python-3-yellow)](https://www.python.org)
 
-Actron is a Australian manufactor of AC systems.  The Que system is their premiere ducted offering.  Its offers "best in world" Air Conditioning.  The aim of this plugin is to control and interface with the Que API.  
+> **Control. Automate. Integrate.**  
+> Full Indigo home-automation control of your Actron Que ducted air-conditioning system via the cloud API.
 
-Some features include complete variable fan speed of both internal and external units (down to 20% fanspeed), meaning that when most zones are off a fraction of power is used and both internal and external boxes are practically silent. 
+---
 
-This plugin access Actron QUE Web Based API to update/control your system.
+## Overview
 
-It is different to some of my previous plugins - because Web based/Internet API access is needed.
-There is no local control method only.
+The **ActronQue Indigo Plugin** connects [Indigo Domotics](https://www.indigodomo.com) to your **Actron Que** ducted reverse-cycle air-conditioning system. Actron is an Australian manufacturer of premium AC systems — the Que is their flagship ducted model offering full zone control, variable fan speed, and cloud connectivity.
 
-Usage
+This plugin communicates with the **Actron Que cloud API** over HTTPS. An internet connection on the Indigo server is required — there is no local-only access method.
 
-Install
+---
 
-Create Actron Main Que Device.
-Enter Actron Account Details.
+## Features
 
-![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueMainSetup.png?raw=true)
+| Feature | Details |
+|---------|---------|
+| 🔌 **AC Power Control** | Turn the system on, off, or toggle from Indigo actions |
+| 🏠 **Zone Control** | Enable / disable individual zones (up to 8) independently |
+| 🌡️ **Live Zone Temperatures** | Per-zone temperature and humidity from wireless sensors |
+| 🎯 **Setpoints & Modes** | Cool / Heat / Auto / Off with per-zone and system-wide setpoints |
+| 💨 **Variable Fan Speed** | Auto / Low / Med / High — down to ~20%, near-silent operation |
+| 😴 **Quiet Mode** | Toggle the system's low-noise Quiet Mode |
+| ⚡ **Energy & Performance Data** | Compressor power, PWM, RPM, capacity, outdoor unit temperature |
+| 🔔 **Alerts** | Clean filter, defrost, DRED, error codes |
+| 📊 **Zone Open Percentage** | Damper position (0–100%) with visual circle images for control pages |
+| 🔄 **Auto Status Updates** | Full system poll every ~30 seconds; immediate refresh after commands |
 
+---
 
-Press Create Zone Devices
-8 Zone devices will be create in the same directory as main device
+## Quick Start
 
-You will be able to access multiple status from both the main Que device, including power usage, sound frequency.
-Temperature readings from each zone are also accessible.
+1. **[Install](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Installation)** the plugin — double-click `ActronQUE.indigoPlugin`
+2. Create an **Actron Que Main Device** in Indigo → enter your Actron account credentials
+3. Click **Generate Zone Devices** — one device per zone is created automatically
+4. Done — control your AC system from Indigo actions, triggers, and control pages
 
-![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueMainStatus.png?raw=true)
+---
 
-![](https://github.com/Ghawken/ActronQue-IndigoPlugin/blob/master/ActronQUE.indigoPlugin/Contents/Resources/QueZone.png?raw=true)
+## Screenshots
 
+| Main Device Setup | Main Device Status | Zone Device |
+|:-----------------:|:-----------------:|:-----------:|
+| ![Setup](https://raw.githubusercontent.com/Ghawken/ActronQue-IndigoPlugin/master/Images/QueMainSetup.png) | ![Status](https://raw.githubusercontent.com/Ghawken/ActronQue-IndigoPlugin/master/Images/QueMainStatus.png) | ![Zone](https://raw.githubusercontent.com/Ghawken/ActronQue-IndigoPlugin/master/Images/QueZone.png) |
 
+---
 
-Most of the relevant Indigo thermostat controls function
-eg. Increase set-point, decrease
-Change Mode Heat/Cool/Off
+## Available Actions
 
-There are two additional action groups to turn a zone on or off
-& to change fan speed.
+- **Turn Main Unit On / Off / Toggle**
+- **Turn Zone On / Off / Toggle**
+- **Set Fan Speed** — Auto / Low / Med / High
+- **Turn Quiet Mode On / Off / Toggle**
+- **Set Zone Cool / Heat Setpoint** (from a list, within zone limits)
+- **Increase / Decrease Zone Cool Setpoint** (0.5 °C steps)
+- **Increase / Decrease Zone Heat Setpoint** (0.5 °C steps)
+- All standard **Indigo thermostat actions** (Set HVAC Mode, Set Setpoint, Increase/Decrease Setpoint, Request Status)
 
-Some of the control options vary depending whether targetting a zone or main controller.
-Can't change main mode (heat -> cool) via zone for example.  
+---
 
-Updates >0.2.1:
+## Requirements
 
-Move to using the latest events api, constantly updating as temp/zone positions/etc change
-Can disable with Main Device options if prefer infrequent 5 minutes info updates.
-However I find that I can display all info on a control page and get frustrated with not immediate updates!
+- **Indigo Domotics** 2022.1 or later
+- **Actron Que** ducted AC system with cloud connectivity
+- **Actron account** — same login as the Actron Que iOS/Android app
+- **Internet access** on the Indigo server
 
+---
 
+## Wiki Documentation
 
+Full documentation is available in the [GitHub Wiki](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki):
+
+| Page | Description |
+|------|-------------|
+| [🏠 Home](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Home) | Overview, features, quick start |
+| [📦 Installation](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Installation) | How to download, install, upgrade |
+| [⚙️ Configuration](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Configuration) | Setting up credentials, generating zone devices |
+| [🖥️ Devices](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Devices) | Main device and Zone device explained |
+| [📊 Device States](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Device-States) | Complete reference of every Indigo device state |
+| [▶️ Actions](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Actions) | All Action Group commands with examples |
+| [🔄 Polling & Updates](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Polling-and-Updates) | How live data and commands work |
+| [🔧 Plugin Preferences](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Plugin-Preferences) | Debug options and log levels |
+| [🛠️ Troubleshooting](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Troubleshooting) | Common issues and solutions |
+| [📋 Changelog](https://github.com/Ghawken/ActronQue-IndigoPlugin/wiki/Changelog) | Full version history |
+
+---
+
+## Plugin Details
+
+| Property | Value |
+|----------|-------|
+| **Plugin ID** | `com.GlennNZ.indigoplugin.ActronQUE` |
+| **Current Version** | 0.6.56 |
+| **Author** | GlennNZ |
+| **API** | `https://que.actronair.com.au` (cloud, HTTPS) |
+| **Indigo API** | 3.0.0 |
+| **Python** | 3 |
+
+---
+
+## Issues & Contributions
+
+Found a bug or have a feature request? Please open an [issue on GitHub](https://github.com/Ghawken/ActronQue-IndigoPlugin/issues).
+
+---
+
+*Developed by GlennNZ — Indigo plugin for Actron Que ducted AC systems.*
