@@ -3,7 +3,7 @@
 # ActronQue — Indigo Plugin
 
 [![Version](https://img.shields.io/badge/version-0.6.56-blue)](https://github.com/Ghawken/ActronQue-IndigoPlugin/releases)
-[![Indigo](https://img.shields.io/badge/Indigo-2022.1%2B-green)](https://www.indigodomo.com)
+[![Indigo](https://img.shields.io/badge/Indigo-20252.1%2B-green)](https://www.indigodomo.com)
 [![Python](https://img.shields.io/badge/Python-3-yellow)](https://www.python.org)
 
 > **Control. Automate. Integrate.**  
