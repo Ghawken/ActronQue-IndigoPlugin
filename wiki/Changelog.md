@@ -9,6 +9,7 @@ Full version history for the ActronQue Indigo Plugin.
 ## v0.6.56 — Bug Fix
 - Fix for rare `NoneType` zone error when iterating zone devices
 
+
 ---
 
 ## v0.6.55 — Polling Fallback
