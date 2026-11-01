@@ -1078,7 +1078,7 @@ class Plugin(indigo.PluginBase):
         compCapacity = float(0)
         CompressorMode = ""
         FanMode = ""
-        quietMode = ""
+        quietMode = False
         WorkingMode = ""
         errorCode = "None"
         SystemSetpoint_Cool = float(0)
@@ -1400,6 +1400,7 @@ class Plugin(indigo.PluginBase):
             alertCF = False
             alertDRED = False
             alertDefrosting = False
+            amRunningFan = False
             fanPWM = float(0)
             fanRPM = float(0)
             IndoorUnitTemp = float(0)
@@ -1412,7 +1413,7 @@ class Plugin(indigo.PluginBase):
             compCapacity = float(0)
             CompressorMode =""
             FanMode = ""
-            quietMode = ""
+            quietMode = False
             WorkingMode = ""
             SystemSetpoint_Cool = float(0)
             SystemSetpoint_Heat = float(0)
@@ -1447,6 +1448,8 @@ class Plugin(indigo.PluginBase):
                     alertDRED = jsonResponse['lastKnownState']['Alerts']['DRED']
                     alertDefrosting = jsonResponse['lastKnownState']['Alerts']['Defrosting']
                 if 'LiveAircon' in jsonResponse['lastKnownState']:
+                    if 'AmRunningFan' in jsonResponse['lastKnownState']['LiveAircon']:
+                        amRunningFan = bool(jsonResponse['lastKnownState']['LiveAircon']['AmRunningFan'])
                     if 'CompressorCapacity' in jsonResponse['lastKnownState']['LiveAircon']:
                         compCapacity = jsonResponse['lastKnownState']['LiveAircon']['CompressorCapacity']
                     if 'FanPWM' in jsonResponse['lastKnownState']['LiveAircon']:
@@ -1693,6 +1696,7 @@ class Plugin(indigo.PluginBase):
                 {'key': 'alertCleanFilter', 'value': alertCF},
                 {'key': 'alertDRED', 'value': alertDRED},
                 {'key': 'alertDefrosting', 'value': alertDefrosting},
+                {'key': 'fanOn', 'value': amRunningFan},
                 {'key': 'indoorFanRPM', 'value': fanRPM},
                 {'key': 'indoorFanPWM', 'value': fanPWM},
                 {'key': 'indoorUnitTemp', 'value': IndoorUnitTemp},
