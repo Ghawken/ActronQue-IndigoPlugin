@@ -2,7 +2,7 @@
 
 # ActronQue — Indigo Plugin
 
-[![Version](https://img.shields.io/badge/version-0.6.56-blue)](https://github.com/Ghawken/ActronQue-IndigoPlugin/releases)
+[![Version](https://img.shields.io/badge/version-0.6.57-blue)](https://github.com/Ghawken/ActronQue-IndigoPlugin/releases)
 [![Indigo](https://img.shields.io/badge/Indigo-20252.1%2B-green)](https://www.indigodomo.com)
 [![Python](https://img.shields.io/badge/Python-3-yellow)](https://www.python.org)
 
@@ -99,7 +99,7 @@ Full documentation is available in the [GitHub Wiki](https://github.com/Ghawken/
 | Property | Value |
 |----------|-------|
 | **Plugin ID** | `com.GlennNZ.indigoplugin.ActronQUE` |
-| **Current Version** | 0.6.56 |
+| **Current Version** | 0.6.57 |
 | **Author** | GlennNZ |
 | **API** | `https://que.actronair.com.au` (cloud, HTTPS) |
 | **Indigo API** | 3.0.0 |

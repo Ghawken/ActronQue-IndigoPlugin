@@ -6,6 +6,12 @@ Full version history for the ActronQue Indigo Plugin.
 
 ---
 
+## v0.6.57 — Boolean State Fixes
+- `quietMode` initialised as `False` (not `""`) in both `getSystemStatus` and `parseFullStatusBroadcast` — was writing an empty string to a Boolean Indigo state
+- `fanOn` (`amRunningFan`) now read from `lastKnownState/LiveAircon` and included in `getSystemStatus` stateList — was never updated by the active polling path since the events API was disabled
+
+---
+
 ## v0.6.56 — Bug Fix
 - Fix for rare `NoneType` zone error when iterating zone devices
 
