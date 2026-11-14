@@ -90,20 +90,35 @@ class IndigoLogHandler(logging.Handler):
         except Exception as ex:
             indigo.server.log(f"Error in Logging: {ex}",type=self.displayName, isError=is_error, level=levelno)
 ################################################################################
+## Command sending behaviour
+CMD_MAX_ATTEMPTS = 5            # total attempts per command, including the first
+CMD_RETRY_BASE_DELAY = 2        # seconds; doubles each retry (2, 4, 8, 15...)
+CMD_RETRY_MAX_DELAY = 15        # seconds; cap for a single back-off
+CMD_MAX_RETRY_WINDOW = 45       # seconds; give up on a command after this long
+CMD_CONFIRM_DELAY = 4           # seconds after the last ack before re-reading status
+LOGIN_MIN_INTERVAL = 30         # seconds; minimum gap between re-logins
+
 class QueCommand:
-    def __init__(self, accessToken, serialNo, commandtype, commandbody, commandrepeats,
-                 deviceid=None, hvacOperationMode=None, setpointCool=None, setpointHeat=None, zoneActive=None):
+    """One set-settings command for the Actron cloud.
+
+    accessToken is kept only as a fallback: the command thread reads the current
+    token from the main device at send time.  onAck is a list of
+    (deviceId, stateKey, value) tuples applied to Indigo only once Actron acks.
+    """
+    def __init__(self, accessToken, serialNo, commandtype, commandbody, seq, onAck=None):
         self.commandaccessToken = accessToken
         self.commandSerialNo = serialNo
         self.commandtype = commandtype
         self.commandbody = commandbody
-        self.commandrepeats = commandrepeats
+        self.seq = seq
+        self.onAck = onAck or []
 
-        self.deviceid = deviceid
-        self.hvacOperationMode = hvacOperationMode
-        self.setpointCool = setpointCool
-        self.setpointHeat = setpointHeat
-        self.zoneActive = zoneActive
+    @property
+    def key(self):
+        return (self.commandSerialNo, self.commandtype)
+
+    def describe(self):
+        return f"{self.commandtype}={self.commandbody}"
 
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
@@ -145,8 +160,13 @@ class Plugin(indigo.PluginBase):
         self.plugin_file_handler.setFormatter(pfmt)
 
         self.sendingCommand = False
-        self.sentCommand = False
+        self.confirmPollAt = 0          # time to re-read status after commands are acked
         self.que = Queue()
+        self.commandSeq = 0
+        self.latestCommandSeq = {}      # (serial, commandtype) -> newest queued seq
+        self.commandLock = threading.Lock()
+        self.loginLock = threading.RLock()
+        self.lastLoginTime = 0
         self.connected = False
         self.deviceUpdate = False
         self.devicetobeUpdated =''
@@ -339,14 +359,17 @@ class Plugin(indigo.PluginBase):
                                     self.getSystemStatus(dev, accessToken, serialNo)
                                     getfullSystemStatus = t.time()+ 300
                             else:  ## disabled use latest Events..
-                                if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and self.sendingCommand==False:
+                                ## Hold routine polls while commands are queued or in flight, so a poll
+                                ## can't read the old state between a command being queued and acked.
+                                commandsIdle = self.sendingCommand == False and self.que.empty()
+                                if t.time() > getlatestEventsTime and self.latestEventsConnectionError==False and commandsIdle:
                                     # Move to Nimbus server token and events given Que has failed.
                                     #self.get_nimbuslatestEvents(dev, nimbus_accessToken, serialNo)
                                     #self.getlatestEvents(dev, accessToken,serialNo)
                                     getlatestEventsTime = t.time() + 30
                                     self.getSystemStatus(dev, accessToken, serialNo)
                                 ## Add full system status check every 15 as getEvent incorrect.
-                                if t.time() > getfullSystemStatus:
+                                if t.time() > getfullSystemStatus and commandsIdle:
                                     self.getSystemStatus(dev, accessToken, serialNo)
                                     getfullSystemStatus = t.time() + 305
 
@@ -361,12 +384,11 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(u"latestEventsConnectionError is True, resetting and trying again")
                     getlatestEventsTime = t.time() +60
                     self.latestEventsConnectionError = False  ## reset connection error here.
-                    self.sendingCommand= False
 
-                if self.sentCommand:
-                    self.logger.debug(f"Command Successfully sent, running full System Update to update devices.")
+                if self.confirmPollAt and t.time() >= self.confirmPollAt and self.que.empty() and not self.sendingCommand:
+                    self.logger.debug(f"Commands finished, running full System Update to confirm device states.")
                     getfullSystemStatus = t.time() - 300  ## eg in past so run now!
-                    self.sentCommand = False
+                    self.confirmPollAt = 0
 
                 startingUp = False
 
@@ -2488,14 +2510,23 @@ class Plugin(indigo.PluginBase):
             # And then tell the Indigo Server to update the state.
 
     ########################################
-    def sendCommand(self, accessToken, serialNo, commandtype, commandbody, repeats):
+    def sendCommand(self, accessToken, serialNo, commandtype, commandbody, repeats=0, onAck=None):
+        """Queue a command for the command thread.
 
-        self.logger.debug(u"Use Que for Command..")
-        if self.debug1:
-            self.logger.debug(f"SendCommand Debug:\n{accessToken=}\n{serialNo=}\n{commandtype=}\n{commandbody=}\n{repeats=}")
-        item = QueCommand(accessToken, serialNo, commandtype, commandbody, repeats)
-        if self.debug1:
-            self.logger.debug(u'Putting Command item into Que: Item:' + str(item))
+        repeats is accepted for compatibility with existing callers and ignored:
+        retries happen inside the command thread.  onAck is a list of
+        (deviceId, stateKey, value) applied to Indigo once Actron acks the command.
+        A newer command for the same setting replaces an older one still waiting.
+        """
+        with self.commandLock:
+            self.commandSeq += 1
+            item = QueCommand(accessToken, serialNo, commandtype, commandbody, self.commandSeq, onAck)
+            replacing = item.key in self.latestCommandSeq
+            self.latestCommandSeq[item.key] = item.seq
+        if replacing:
+            self.logger.debug(f"Queued {item.describe()} (replaces an older pending command for the same setting)")
+        else:
+            self.logger.debug(f"Queued {item.describe()}")
         self.que.put(item)
         return
 
@@ -2547,121 +2578,153 @@ class Plugin(indigo.PluginBase):
     def threadCommand(self):
         self.logger.debug("ThreadCommand up and running...")
         while True:
-            self.sleep(0.5)
+            item = self.que.get()   # blocks until a command is queued
             try:
-                self.sleep(1)
-                item = self.que.get()   # blocks here until another que items
-                ## blocks here until next item
                 self.sendingCommand = True
-                commandaccessToken = item.commandaccessToken
-                commandSerialNo = item.commandSerialNo
-                commandtype = item.commandtype
-                commandbody = item.commandbody
-                commandrepeats = item.commandrepeats
-
-                # Retrieve optional parameters
-                deviceid = item.deviceid
-                hvacOperationMode = item.hvacOperationMode  ##Main Oper Mode
-                setpointCool = item.setpointCool
-                setpointHeat = item.setpointHeat
-                zoneActive = item.zoneActive
-
-                self.logger.debug(
-                    "Optional parameters: deviceid=%s, hvacOperationMode=%s, setpointCool=%s, setpointHeat=%s",
-                    deviceid,
-                    hvacOperationMode,
-                    setpointCool,
-                    setpointHeat,
-
-                )
-
-                try:
-                    self.logger.debug("Sending System Command for System Serial No %s" % commandSerialNo)
-                    self.logger.debug("Sending Command " + str(commandtype) + " and commandbody:" + str(
-                        commandbody) + " and time command repeated:" + str(commandrepeats))
-
-                    if commandrepeats >= 5:
-                        self.logger.info('Command failed after multiple repeats. Aborting.')
-                        continue
-
-                    # self.logger.info("Connecting to %s" % address)
-                    url = 'https://que.actronair.com.au/api/v0/client/ac-systems/cmds/send?serial=' + str(commandSerialNo)
-                    headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
-                               'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
-                               'Authorization': 'Bearer ' + commandaccessToken}
-                    payload = {"command": {commandtype: commandbody, "type": "set-settings"}}
-
-                    self.logger.debug(str(payload))
-                    r = requests.post(url, headers=headers, json=payload, timeout=15, verify=False)
-                    self.logger.debug(r.text)
-
-                    if r.status_code != 200:
-                        self.logger.debug("Error Message from get System Status.")
-                        self.logger.debug(str(r.text))
-                        commandrepeats = commandrepeats + 1
-                        if r.json() is None:
-                            self.logger.info("Nothing returned from Action API.  Aborting.")
-
-                        if 'type' in r.json():
-                            typereturned = str(r.json()['type'])
-                            self.logger.debug("Type returned and is " + str(typereturned))
-                            if typereturned == "timeout":
-                                self.logger.info("Timeout received from Actron API for System Command.  Will retry.")
-                                if int(commandrepeats) <= 5:
-                                    self.sleep(5)
-                                    self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody,   int(commandrepeats))
-                                else:
-                                    self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
-
-                        # Authorisation may have failed/taken over
-                        self.logger.debug("Recreating Tokens incase expired.  Another login and then retrying.")
-                        self.checkMainDevices()
-                        self.sleep(5)
-                        if int(commandrepeats) <= 5:
-                            self.sendCommand(commandaccessToken, commandSerialNo, commandtype, commandbody, int(commandrepeats))
-                        else:
-                            self.logger.info("Failed after 5 repeats.  Abandoning attempts.")
-
-
-                    if r.json() is not None:
-                        if 'type' in r.json():
-                            typereturned = str(r.json()['type'])
-                            if typereturned == "ack":  ## command successful
-                                self.logger.info("Command ack successfully by QUE. Returning successful completion.")
-                                self.sentCommand = True  ## Successfully command sent.
-                                # If deviceid and hvacOperationMode are provided, update Indigo device state.
-                                # if deviceid is not None and hvacOperationMode is not None:
-                                #     try:
-                                #         device = indigo.devices[int(deviceID)]
-                                #         if device.deviceTypeId == "queZone":
-                                #             if str(zoneActive) == "True":
-                                #                 zones.updateStateOnServer("zoneisEnabled", True)
-                                #                 currentMode = item.hvacOperationMode
-                                #                 zones.updateStateOnServer('hvacOperationMode', currentMode)
-                                #             elif str(zoneActive) == "False":
-                                #                 zones.updateStateOnServer("zoneisEnabled", False)
-                                #                 zones.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
-                                #     except:
-                                #         self.logger.debug(f"Exception Caught in Command Update", exc_info=True)
-
-                    self.sendingCommand = False
-                    self.latestEventsConnectionError = False
-                    self.que.task_done()
-
-                except requests.Timeout:
-                    self.logger.info("Request timedout to que.actron.com.au")
-                    self.latestEventsConnectionError = True
-                    self.sleep(1)
-
-                except:
-                    self.logger.exception("Exception in send Command")
-
-
+                self._processCommand(item)
+                self.sleep(0.5)     # small gap between commands, kinder to the Actron API
             except self.StopThread:
-                self.logger.debug(u'Self.Stop Thread called')
+                self.logger.debug(u'Command thread stopping.')
+                return
+            except Exception:
+                self.logger.exception(u"Exception in send Command")
+                self.confirmPollAt = t.time()   # re-read status so Indigo shows the real state
+            finally:
+                with self.commandLock:
+                    if self.latestCommandSeq.get(item.key) == item.seq:
+                        del self.latestCommandSeq[item.key]
+                self.sendingCommand = False
+                self.que.task_done()
 
-            except:
-                self.logger.exception(u'Command Thread Excepton')
+    def _processCommand(self, item):
+        """Send one command, retrying in place with back-off until acked, superseded or abandoned."""
+        desc = item.describe()
+        startTime = t.time()
+        attempt = 0
+        while True:
+            if self._isCommandSuperseded(item):
+                self.logger.debug(f"Command {desc} dropped: a newer command for the same setting is queued.")
+                return
+
+            attempt += 1
+            maindevice = self._getMainDeviceForSerial(item.commandSerialNo)
+            if maindevice is not None:
+                accessToken = maindevice.pluginProps.get('accessToken', '')   # current token, not the queued one
+            else:
+                accessToken = item.commandaccessToken
+
+            self.logger.debug(f"Sending command {desc} to {item.commandSerialNo} (attempt {attempt}/{CMD_MAX_ATTEMPTS})")
+            result, detail = self._postCommand(item.commandSerialNo, accessToken, item.commandtype, item.commandbody)
+
+            if result == "ack":
+                self.logger.info(f"Command {desc} acknowledged by Actron.")
+                self._applyAckStates(item)
+                self.confirmPollAt = t.time() + CMD_CONFIRM_DELAY
+                return
+
+            if result == "reject":
+                self.logger.warning(f"Command {desc} rejected by Actron ({detail}). Not retrying.")
+                self.confirmPollAt = t.time()
+                return
+
+            if result == "auth":
+                if maindevice is not None:
+                    self._relogin(maindevice, f"authorisation failed sending {desc} ({detail})")
+                else:
+                    self.logger.info(f"No main device found for serial {item.commandSerialNo}; cannot log in again.")
+
+            if attempt >= CMD_MAX_ATTEMPTS or t.time() - startTime >= CMD_MAX_RETRY_WINDOW:
+                self.logger.warning(f"Command {desc} failed after {attempt} attempts ({detail}). Abandoning; refreshing status.")
+                self.confirmPollAt = t.time()
+                return
+
+            delay = min(CMD_RETRY_BASE_DELAY * (2 ** (attempt - 1)), CMD_RETRY_MAX_DELAY)
+            self.logger.info(f"Command {desc} not acknowledged ({detail}). Retrying in {delay}s.")
+            self.sleep(delay)
+
+    def _postCommand(self, serialNo, accessToken, commandtype, commandbody):
+        """POST one set-settings command.  Returns (result, detail).
+
+        result is one of:
+          "ack"    - Actron accepted the command
+          "auth"   - authorisation failed; log in again, then retry
+          "retry"  - transient failure (network, timeout, 5xx, non-ack reply)
+          "reject" - Actron refused the command (4xx); retrying won't help
+        """
+        if not accessToken:
+            return "auth", "no access token"
+
+        url = 'https://que.actronair.com.au/api/v0/client/ac-systems/cmds/send?serial=' + str(serialNo)
+        headers = {'Host': 'que.actronair.com.au', 'Accept': '*/*', 'Accept-Language': 'en-au',
+                   'User-Agent': 'nxgen-ios/1214 CFNetwork/976 Darwin/18.2.0',
+                   'Authorization': 'Bearer ' + accessToken}
+        payload = {"command": {commandtype: commandbody, "type": "set-settings"}}
+        self.logger.debug(str(payload))
+
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=15, verify=False)
+        except requests.exceptions.Timeout:
+            return "retry", "request timed out"
+        except requests.exceptions.ConnectionError as e:
+            return "retry", f"connection error ({type(e).__name__})"
+        except requests.exceptions.RequestException as e:
+            return "retry", f"request error ({type(e).__name__})"
+
+        self.logger.debug(f"Command reply HTTP {r.status_code}: {r.text}")
+
+        if r.status_code in (401, 403) or (r.status_code != 200 and "Authorization has been denied" in r.text):
+            return "auth", f"HTTP {r.status_code}"
+
+        try:
+            body = r.json()
+        except ValueError:
+            body = None
+        replyType = str(body.get('type')) if isinstance(body, dict) and 'type' in body else None
+
+        if r.status_code == 200:
+            if replyType == "ack":
+                return "ack", "ack"
+            return "retry", f"reply type {replyType!r}"
+        if replyType == "timeout":
+            return "retry", "Actron timed out waiting for the unit"
+        if r.status_code >= 500 or r.status_code in (408, 429):
+            return "retry", f"HTTP {r.status_code}"
+        return "reject", f"HTTP {r.status_code}: {r.text[:200]}"
+
+    def _isCommandSuperseded(self, item):
+        with self.commandLock:
+            return self.latestCommandSeq.get(item.key, item.seq) != item.seq
+
+    def _applyAckStates(self, item):
+        for devId, stateKey, value in item.onAck:
+            try:
+                indigo.devices[int(devId)].updateStateOnServer(stateKey, value)
+            except Exception:
+                self.logger.debug(f"Could not apply {stateKey}={value} to device {devId}", exc_info=True)
+
+    def _getMainDeviceForSerial(self, serialNo):
+        for dev in indigo.devices.itervalues(filter="self"):
+            if dev.deviceTypeId == "ActronQueMain" and str(dev.pluginProps.get('serialNo', '')) == str(serialNo):
+                return dev
+        return None
+
+    def _relogin(self, maindevice, reason):
+        """Get a fresh access token for one main device.  Serialised and rate-limited."""
+        with self.loginLock:
+            if t.time() - self.lastLoginTime < LOGIN_MIN_INTERVAL:
+                self.logger.debug(f"Re-login skipped ({reason}): last login was under {LOGIN_MIN_INTERVAL}s ago.")
+                return False
+            self.lastLoginTime = t.time()
+            self.logger.info(f"Logging in to Actron again: {reason}")
+            dev = indigo.devices[maindevice.id]   # fresh copy of props
+            accessToken = self.getPairingToken(dev.pluginProps['username'], dev.pluginProps['password'])
+            if not accessToken:
+                self.logger.info("Unable to get a new Access Token; check username and password.")
+                return False
+            props = dev.pluginProps
+            props['accessToken'] = accessToken
+            dev.replacePluginPropsOnServer(props)
+            return True
 ####################################
 
     def validatePrefsConfigUi(self, valuesDict):
