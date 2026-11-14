@@ -401,6 +401,12 @@ class Plugin(indigo.PluginBase):
             self.sleep(5)
 
     def checkMainDevices(self):
+        ## Serialise logins: this runs from both the main loop and the command/action threads.
+        with self.loginLock:
+            self.lastLoginTime = t.time()
+            self._checkMainDevices()
+
+    def _checkMainDevices(self):
         self.logger.debug("Check Main QUE Devices Run")
         for dev in indigo.devices.itervalues(filter="self"):
             if dev.deviceTypeId == "ActronQueMain":
@@ -1406,10 +1412,12 @@ class Plugin(indigo.PluginBase):
             # payload = {'username':username, 'password':password, 'client':'ios', 'deviceUniqueIdentifier':'IndigoPlugin'}
             r = requests.get(url, headers=headers, timeout=15, verify=False)
             if r.status_code != 200:
-                self.logger.info("Error Message from get System Status")
+                self.logger.info(f"Error Message from get System Status (HTTP {r.status_code})")
                 self.logger.debug(str(r.text))
-                self.sleep(5)
-                self.checkMainDevices()
+                ## Only log in again on an authorisation failure.  Calling checkMainDevices() here
+                ## looped (checkMainDevices -> getSystemStatus -> checkMainDevices ...) during outages.
+                if r.status_code in (401, 403) or "Authorization has been denied" in r.text:
+                    self._relogin(device, f"authorisation failed reading status (HTTP {r.status_code})")
                 return "blank"
 # serialNumber = jsonResponse['_embedded']['ac-system'][0]['serial']
             self.logger.debug(str(r.text))
