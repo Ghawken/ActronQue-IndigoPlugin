@@ -164,6 +164,7 @@ class Plugin(indigo.PluginBase):
         self.que = Queue()
         self.commandSeq = 0
         self.latestCommandSeq = {}      # (serial, commandtype) -> newest queued seq
+        self.latestCommandBody = {}     # (serial, commandtype) -> value of that newest queued command
         self.commandLock = threading.Lock()
         self.loginLock = threading.RLock()
         self.lastLoginTime = 0
@@ -2037,144 +2038,65 @@ class Plugin(indigo.PluginBase):
             elif zoneonoroff == "OFF":  ## need to turn AC off
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0)
                 self.logger.info("Turning off Zone number "+str(int(zoneNumber)+1))
-                zonedevice.updateStateOnServer("zoneisEnabled", True)
-                zonedevice.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
+                zonedevice.updateStateOnServer("zoneisEnabled", False)
+                zonedevice.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
             elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off and (zoneonoroff == "OFF" or zoneonoroff=="TOGGLE"):
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.EnabledZones["+zoneNumber+"]", False, 0)
                 self.logger.info("Turning off Zone number "+str(int(zoneNumber)+1))
                 zonedevice.updateStateOnServer("zoneisEnabled", False)
-                zonedevice.updateStateOnServer('hvacOperationMode', mainDevicehvacMode)
+                zonedevice.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
 
         return
 
-    def increaseZoneHeatPoint(self,action):  # increase by 0.5 degrees
-        self.logger.debug(u'Increase zone heat point called as Action.')
+    def increaseZoneHeatPoint(self, action):  # increase by 0.5 degrees
+        self._stepZoneSetpoint(action, "Heat", 0.5)
+
+    def decreaseZoneHeatPoint(self, action):  # decrease by 0.5 degrees
+        self._stepZoneSetpoint(action, "Heat", -0.5)
+
+    def increaseZoneCoolPoint(self, action):  # increase by 0.5 degrees
+        self._stepZoneSetpoint(action, "Cool", 0.5)
+
+    def decreaseZoneCoolPoint(self, action):  # decrease by 0.5 degrees
+        self._stepZoneSetpoint(action, "Cool", -0.5)
+
+    def _stepZoneSetpoint(self, action, kind, step):
+        """Move a zone's Heat or Cool setpoint by step degrees, within the zone's limits."""
+        self.logger.debug(f"Step zone {kind} point by {step} called as Action.")
         try:
             deviceID = action.props.get("deviceID", "")
-
-            if deviceID == ""  :
-                self.logger.info("Action details not correct.")
-                return
-            zonedevice = indigo.devices[int(deviceID)]
-            accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-            maxheatsp = float(zonedevice.states['MaxHeatSetpoint'])
-            minheatsp = float(zonedevice.states['MinHeatSetpoint'])
-            tempsp = float(zonedevice.states['TempSetPointHeat'])
-
-            if tempsp >= maxheatsp or (tempsp+0.5)> maxheatsp:  # shouldn't ever be greater..
-                self.logger.info("Max Heat Set point reached for zone.  Increase Master limit to go higher with the zones.")
-                return
-
-            targetsp = float(tempsp + 0.5)
-            if zonedevice.deviceTypeId == "queZone":
-                ## if a zone device needs different command
-                ## probably best to be OFF or anything else
-                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-                # update device here, so if command sent and then re-sent will reflect new temp wanted
-                zonedevice.updateStateOnServer("TempSetPointHeat", float(targetsp))
-                zonedevice.updateStateOnServer("setpointHeat", float(targetsp))
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(targetsp), 0)
-                self.logger.info("Heat SetPoint of Zone " + str( int(zoneNumber)+ 1) + " updated to " + str(targetsp) + " degrees")
-        except:
-            self.logger.exception("Caught Exception in increaseZoneHP")
-
-    def decreaseZoneHeatPoint(self,action):  # deccrease by 0.5 degrees
-        self.logger.debug(u'Decrease zone heat point called as Action.')
-        try:
-            deviceID = action.props.get("deviceID", "")
-
-            if deviceID == ""  :
-                self.logger.info("Action details not correct.")
-                return
-            zonedevice = indigo.devices[int(deviceID)]
-            accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-            maxheatsp = float(zonedevice.states['MaxHeatSetpoint'])
-            minheatsp = float(zonedevice.states['MinHeatSetpoint'])
-            tempsp = float(zonedevice.states['TempSetPointHeat'])
-
-            if tempsp <= minheatsp or (tempsp-0.5)< minheatsp:  # shouldn't ever be greater..
-                self.logger.info("Minimum Heat Set point reached for zone.  Decrease Master limit to go lower with the zones.")
-                return
-
-            targetsp = float(tempsp - 0.5)
-            if zonedevice.deviceTypeId == "queZone":
-                ## if a zone device needs different command
-                ## probably best to be OFF or anything else
-                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from
-                zonedevice.updateStateOnServer("TempSetPointHeat", float(targetsp))
-                zonedevice.updateStateOnServer("setpointHeat", float(targetsp))
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(targetsp), 0)
-                self.logger.info("Heat SetPoint of Zone " + str(int(zoneNumber) + 1) + " updated to " + str(targetsp) + " degrees")
-        except:
-            self.logger.exception("Caught Exception in decrease Zone Heat Point")
-
-    def increaseZoneCoolPoint(self, action):  # deccrease by 0.5 degrees
-        self.logger.debug(u'Increase zone Cool point called as Action.')
-        try:
-            deviceID = action.props.get("deviceID", "")
-
             if deviceID == "":
                 self.logger.info("Action details not correct.")
                 return
             zonedevice = indigo.devices[int(deviceID)]
+            if zonedevice.deviceTypeId != "queZone":
+                return
             accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-            maxcoolsp = float(zonedevice.states['MaxCoolSetpoint'])
-            mincoolsp = float(zonedevice.states['MinCoolSetpoint'])
-            tempsp = float(zonedevice.states['TempSetPointCool'])
-
-            if tempsp >= maxcoolsp or (tempsp + 0.5) > maxcoolsp:  # shouldn't ever be greater..
-                self.logger.info(
-                    "Maximum Cool Set point reached for zone.  Increase Master limit to go higher within the zones.")
+            if accessToken == "error" or serialNo == "error":
+                self.logger.info("Unable to complete accessToken or Serial No issue")
                 return
 
-            targetsp = float(tempsp + 0.5)
-            if zonedevice.deviceTypeId == "queZone":
-                ## if a zone device needs different command
-                ## probably best to be OFF or anything else
-                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-                zonedevice.updateStateOnServer("TempSetPointCool", float(targetsp))
-                zonedevice.updateStateOnServer("setpointCool", float(targetsp))
-                self.sendCommand(accessToken, serialNo,  "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(targetsp), 0)
-                self.logger.info("Cool SetPoint of Zone " + str(int(zoneNumber) + 1) + " updated to " + str(targetsp) + " degrees")
-        except:
-            self.logger.exception("Caught Exception in decrease Zone Cool set Point")
+            zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
+            commandtype = f"RemoteZoneInfo[{zoneNumber}].TemperatureSetpoint_{kind}_oC"
+            maxsp = float(zonedevice.states[f'Max{kind}Setpoint'])
+            minsp = float(zonedevice.states[f'Min{kind}Setpoint'])
+            # Step from any value still waiting to be acked, so quick presses add up
+            current = float(self._pendingCommandValue(serialNo, commandtype, zonedevice.states[f'TempSetPoint{kind}']))
+            targetsp = current + step
 
-    def decreaseZoneCoolPoint(self, action):  # deccrease by 0.5 degrees
-        self.logger.debug(u'Decrease zone Cool point called as Action.')
-        try:
-            deviceID = action.props.get("deviceID", "")
-
-            if deviceID == "":
-                self.logger.info("Action details not correct.")
+            if targetsp > maxsp:
+                self.logger.info(f"Maximum {kind} Set point reached for zone.  Increase Master limit to go higher with the zones.")
                 return
-            zonedevice = indigo.devices[int(deviceID)]
-            accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-            maxcoolsp = float(zonedevice.states['MaxCoolSetpoint'])
-            mincoolsp = float(zonedevice.states['MinCoolSetpoint'])
-            tempsp = float(zonedevice.states['TempSetPointCool'])
-
-            if tempsp <= mincoolsp or (tempsp - 0.5) < mincoolsp:  # shouldn't ever be greater..
-                self.logger.info(
-                    "Minimum Cool Set point reached for zone.  Decrease Master limit to go lower with the zones.")
+            if targetsp < minsp:
+                self.logger.info(f"Minimum {kind} Set point reached for zone.  Decrease Master limit to go lower with the zones.")
                 return
 
-            targetsp = float(tempsp - 0.5)
-            if zonedevice.deviceTypeId == "queZone":
-                ## if a zone device needs different command
-                ## probably best to be OFF or anything else
-                zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
-                zonedevice.updateStateOnServer("TempSetPointCool", float(targetsp))
-                zonedevice.updateStateOnServer("setpointCool", float(targetsp))
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(targetsp),  0)
-                self.logger.info(u"Cool SetPoint of Zone " + str( int(zoneNumber)+ 1 ) + u" updated to " + str(targetsp) + u" degrees")
+            self._queueSetpoint(accessToken, serialNo, zonedevice, commandtype, targetsp, (f"TempSetPoint{kind}", f"setpoint{kind}"))
+            self.logger.info(f"{kind} SetPoint of Zone {int(zoneNumber) + 1} being set to {targetsp} degrees")
+        except Exception:
+            self.logger.exception(f"Caught Exception changing zone {kind} set point")
 
-        except:
-            self.logger.exception("Caught Exception in decrease Zone Cool set Point")
 
     def setZoneCoolPoint(self, action):
         self.logger.debug(u"setZoneCoolsetpoint Called as Action.")
@@ -2186,8 +2108,6 @@ class Plugin(indigo.PluginBase):
             return
         zonedevice = indigo.devices[int(deviceID)]
         accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-        mainDevicehvacMode = maindevice.states['hvacOperationMode']
         if accessToken == "error" or serialNo == "error":
             self.logger.info("Unable to complete accessToken or Serial No issue")
             return
@@ -2196,13 +2116,9 @@ class Plugin(indigo.PluginBase):
             ## probably best to be OFF or anything else
             zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
             if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off:
-                ## need to turn on Zone
                 self.logger.info("Zone is disabled/off currently, not sure can set SetPoint temperature.. happy to try...")
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(settemp),0)
-            elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off:
-                self.logger.debug("Checking: Zone appears on:")
-                ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(settemp),0)
+            self._queueSetpoint(accessToken, serialNo, zonedevice, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC",
+                                settemp, ("TempSetPointCool", "setpointCool"))
         return
 
     def setZoneHeatPoint(self, action):
@@ -2215,8 +2131,6 @@ class Plugin(indigo.PluginBase):
             return
         zonedevice = indigo.devices[int(deviceID)]
         accessToken, serialNo, maindevice = self.returnmainAccessSerial(zonedevice)
-
-        mainDevicehvacMode = maindevice.states['hvacOperationMode']
         if accessToken == "error" or serialNo == "error":
             self.logger.info("Unable to complete accessToken or Serial No issue")
             return
@@ -2225,15 +2139,9 @@ class Plugin(indigo.PluginBase):
             ## probably best to be OFF or anything else
             zoneNumber = str(int(zonedevice.states['zoneNumber']) - 1)  # counts zones from zero
             if zonedevice.states['hvacOperationMode'] == indigo.kHvacMode.Off:
-                ## need to turn on Zone
                 self.logger.info("Zone is disabled/off currently, not sure can set SetPoint temperature.. happy to try...")
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(settemp),0)
-
-
-            elif zonedevice.states['hvacOperationMode'] != indigo.kHvacMode.Off:
-                self.logger.debug("Checking: Zone appears on:")
-                ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC", float(settemp),0)
+            self._queueSetpoint(accessToken, serialNo, zonedevice, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC",
+                                settemp, ("TempSetPointHeat", "setpointHeat"))
 
         return
 
@@ -2241,7 +2149,6 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"setMain Device Called as Action.")
         onoroff = action.props.get('setting',"OFF")  #add TOGGLE
         deviceID = action.props.get("deviceID","")
-        sendSuccess= False
 
         if deviceID =="":
             self.logger.info("Details not correct.")
@@ -2270,22 +2177,7 @@ class Plugin(indigo.PluginBase):
                 ## DEVICE IS ON - COOL or Heat and wants to go off or toggle
                 self.sendCommand(accessToken, serialNo, "UserAirconSettings.isOn", False, 0)
                 self.logger.info("Turning off AC System.")
-
-        if sendSuccess:
-            # If success then log that the command was successfully sent.
-            indigo.server.log(u"Sent \"%s\" mode change to %s" % (maindevice.name, onoroff))
-            if "hvacOperationMode" in maindevice.states:
-                if onoroff == "OFF":
-                    maindevice.updateStateOnServer("hvacOperationMode", indigo.kHvacMode.Off)
-            ## Update status as zones open now, devices on etc.
-            self.sleep(2)
-            accessToken = maindevice.pluginProps['accessToken']
-            serialNo = maindevice.pluginProps['serialNo']
-            if accessToken == "" or serialNo == "":
-                self.logger.debug("Probably expired token.  Running Access Token Recreate")
-                self.checkMainDevices()
-            else:
-                self.getSystemStatus(maindevice, accessToken, serialNo)
+        ## Status is re-read automatically once the command is acked.
         return
 
     def setQuiet(self, action):
@@ -2404,7 +2296,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("Turning off AC System. ")
 
             ## only for main device
-            sendSuccess = self.sendCommand(accessToken, serialNo, "UserAirconSettings.Mode", str(actionStr).upper(),0)
+            self.sendCommand(accessToken, serialNo, "UserAirconSettings.Mode", str(actionStr).upper(),0)
 
         if dev.deviceTypeId == "queZone":
             ## if a zone device needs different command
@@ -2422,12 +2314,8 @@ class Plugin(indigo.PluginBase):
                 dev.updateStateOnServer("zoneisEnabled", False)
                 dev.updateStateOnServer('hvacOperationMode', indigo.kHvacMode.Off)
                 self.logger.info("Turning off Zone number "+str(zoneNumber))
-
-            if accessToken == "" or serialNo == "":
-                self.logger.debug("Probably expired token.  Running Access Token Recreate")
-                self.checkMainDevices()
-            else:
-                zonenames = self.getSystemStatus(maindevice, accessToken, serialNo)
+            ## No status refresh here: the command is only queued, so a refresh now would read the
+            ## old state and undo the update above.  Status is re-read once the command is acked.
 
 
     ######################
@@ -2494,26 +2382,22 @@ class Plugin(indigo.PluginBase):
 
             zoneNumber = str(int(dev.states['zoneNumber']) - 1)  # counts zones from zero
             if stateKey == u"setpointHeat":
-                dev.updateStateOnServer("TempSetPointHeat", float(newSetpoint))
-                dev.updateStateOnServer("setpointHeat", float(newSetpoint))
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC",float(newSetpoint), 0)
+                self._queueSetpoint(accessToken, serialNo, dev, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Heat_oC",
+                                    newSetpoint, ("TempSetPointHeat", "setpointHeat"))
                 self.logger.info("Heat SetPoint of Zone " + str(int(zoneNumber) + 1) + " updated to " + str( newSetpoint) + " degrees")
             elif stateKey ==u"setpointCool":
-                dev.updateStateOnServer("TempSetPointCool", float(newSetpoint))
-                dev.updateStateOnServer("setpointCool", float(newSetpoint))
-                self.sendCommand(accessToken, serialNo, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC", float(newSetpoint), 0)
+                self._queueSetpoint(accessToken, serialNo, dev, "RemoteZoneInfo[" + zoneNumber + "].TemperatureSetpoint_Cool_oC",
+                                    newSetpoint, ("TempSetPointCool", "setpointCool"))
                 self.logger.info("Cool SetPoint of Zone " + str(int(zoneNumber) + 1) + " updated to " + str( newSetpoint) + " degrees")
         else:
             ## need to turn on and change mode
             if stateKey == u"setpointCool":
-                dev.updateStateOnServer("setpointCool", float(newSetpoint))
-                self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Cool_oC", newSetpoint, 0)
+                self._queueSetpoint(accessToken, serialNo, dev, "UserAirconSettings.TemperatureSetpoint_Cool_oC", newSetpoint, ("setpointCool",))
             elif stateKey == u"setpointHeat":
-                dev.updateStateOnServer("setpointHeat", float(newSetpoint))
-                self.sendCommand(accessToken, serialNo, "UserAirconSettings.TemperatureSetpoint_Heat_oC", newSetpoint, 0)
+                self._queueSetpoint(accessToken, serialNo, dev, "UserAirconSettings.TemperatureSetpoint_Heat_oC", newSetpoint, ("setpointHeat",))
 
             # If success then log that the command was successfully sent.
-        indigo.server.log(u"sent \"%s\" %s to %.1f°" % (dev.name, logActionName, newSetpoint))
+        indigo.server.log(u"queued \"%s\" %s to %.1f° (shown once Actron acknowledges)" % (dev.name, logActionName, newSetpoint))
 
             # And then tell the Indigo Server to update the state.
 
@@ -2531,6 +2415,7 @@ class Plugin(indigo.PluginBase):
             item = QueCommand(accessToken, serialNo, commandtype, commandbody, self.commandSeq, onAck)
             replacing = item.key in self.latestCommandSeq
             self.latestCommandSeq[item.key] = item.seq
+            self.latestCommandBody[item.key] = commandbody
         if replacing:
             self.logger.debug(f"Queued {item.describe()} (replaces an older pending command for the same setting)")
         else:
@@ -2601,6 +2486,7 @@ class Plugin(indigo.PluginBase):
                 with self.commandLock:
                     if self.latestCommandSeq.get(item.key) == item.seq:
                         del self.latestCommandSeq[item.key]
+                        self.latestCommandBody.pop(item.key, None)
                 self.sendingCommand = False
                 self.que.task_done()
 
@@ -2698,6 +2584,17 @@ class Plugin(indigo.PluginBase):
         if r.status_code >= 500 or r.status_code in (408, 429):
             return "retry", f"HTTP {r.status_code}"
         return "reject", f"HTTP {r.status_code}: {r.text[:200]}"
+
+    def _pendingCommandValue(self, serialNo, commandtype, default):
+        """Value of a queued-but-not-yet-acked command for this setting, else default."""
+        with self.commandLock:
+            return self.latestCommandBody.get((serialNo, commandtype), default)
+
+    def _queueSetpoint(self, accessToken, serialNo, dev, commandtype, value, stateKeys):
+        """Queue a setpoint command; the device's setpoint states update only once Actron acks."""
+        value = float(value)
+        onAck = [(dev.id, stateKey, value) for stateKey in stateKeys]
+        self.sendCommand(accessToken, serialNo, commandtype, value, 0, onAck=onAck)
 
     def _isCommandSuperseded(self, item):
         with self.commandLock:
