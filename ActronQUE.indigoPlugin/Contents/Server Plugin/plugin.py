@@ -1432,6 +1432,8 @@ class Plugin(indigo.PluginBase):
             alertDRED = False
             alertDefrosting = False
             amRunningFan = False
+            heaterIsOn = False
+            coolerIsOn = False
             fanPWM = float(0)
             fanRPM = float(0)
             IndoorUnitTemp = float(0)
@@ -1554,6 +1556,15 @@ class Plugin(indigo.PluginBase):
                         MainStatus = indigo.kHvacMode.Off
                 except UnboundLocalError:
                     self.logger.debug("isACturnedOn doesn't exit... skipping On/Off/Mode update.")
+
+                ## Heating/cooling indicators (Indigo equipment state, HomeKit "Heating"/"Cooling"
+                ## rather than "Idle"): on only while the compressor is running in that mode.
+                compressorRunning = self._asFloat(CompSpeed) > 0 or self._asFloat(compCapacity) > 0
+                compMode = str(CompressorMode).upper()
+                systemOn = MainStatus != indigo.kHvacMode.Off
+                heaterIsOn = systemOn and compressorRunning and compMode == "HEAT"
+                coolerIsOn = systemOn and compressorRunning and compMode == "COOL"
+                self.logger.debug(f"Compressor {compMode=} {compressorRunning=} -> {heaterIsOn=} {coolerIsOn=}")
 
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
                     async def start_washing(self) -> None:
@@ -1695,6 +1706,8 @@ class Plugin(indigo.PluginBase):
                                     {'key': 'zoneisEnabled', 'value': listzonesopen[x]},
                                     {'key': 'zoneisOpen', 'value': zoneOpen},
                                     {'key': 'hvacOperationMode', 'value': ZoneStatus},
+                                    {'key': 'hvacHeaterIsOn', 'value': bool(heaterIsOn and zoneOpen and ZoneStatus != indigo.kHvacMode.Off)},
+                                    {'key': 'hvacCoolerIsOn', 'value': bool(coolerIsOn and zoneOpen and ZoneStatus != indigo.kHvacMode.Off)},
                                     {'key': 'TempSetPointCool', 'value': tempsetpointcool},
                                     {'key': 'TempSetPointHeat', 'value': tempsetpointheat},
                                     {'key': 'zonePosition', 'value': ZonePosition},
@@ -1738,6 +1751,8 @@ class Plugin(indigo.PluginBase):
                 {'key': 'outdoorUnitCompSpeed', 'value': CompSpeed},
                 {'key': 'outdoorUnitCompMode', 'value': CompressorMode},
                 {'key': 'hvacOperationMode', 'value': MainStatus},
+                {'key': 'hvacHeaterIsOn', 'value': bool(heaterIsOn)},
+                {'key': 'hvacCoolerIsOn', 'value': bool(coolerIsOn)},
                 {'key': 'temperatureInput1', 'value': averageTemp},
                 {'key': 'humidityInput1', 'value': main_humidity},
                 {'key': 'quietMode', 'value': quietMode},
@@ -2584,6 +2599,13 @@ class Plugin(indigo.PluginBase):
         if r.status_code >= 500 or r.status_code in (408, 429):
             return "retry", f"HTTP {r.status_code}"
         return "reject", f"HTTP {r.status_code}: {r.text[:200]}"
+
+    @staticmethod
+    def _asFloat(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _pendingCommandValue(self, serialNo, commandtype, default):
         """Value of a queued-but-not-yet-acked command for this setting, else default."""
