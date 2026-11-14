@@ -6,6 +6,18 @@ Full version history for the ActronQue Indigo Plugin.
 
 ---
 
+## v0.6.58 — Command Reliability
+- Commands that fail (network error, timeout, non-JSON or non-ack reply) are retried in place with back-off: 2, 4, 8, 15s, up to 5 attempts or 45s
+- `sendingCommand` is always cleared, so one failed command can no longer hold up status polling
+- A newer command for the same setting replaces an older one, even mid-retry, so the last request always wins
+- The current access token is read at send time; re-login only on 401/403, serialised and rate-limited
+- Fixed a login loop between `getSystemStatus` and `checkMainDevices` when the status endpoint fails
+- Setpoint states update only after Actron acknowledges; status is re-read 4s after the last ack, and immediately if a command is abandoned
+- `hvacHeaterIsOn` / `hvacCoolerIsOn` set from the compressor on main and zone devices
+- Zone OFF action now marks the zone disabled/Off
+
+---
+
 ## v0.6.57 — Boolean State Fixes
 - `quietMode` initialised as `False` (not `""`) in both `getSystemStatus` and `parseFullStatusBroadcast` — was writing an empty string to a Boolean Indigo state
 - `fanOn` (`amRunningFan`) now read from `lastKnownState/LiveAircon` and included in `getSystemStatus` stateList — was never updated by the active polling path since the events API was disabled

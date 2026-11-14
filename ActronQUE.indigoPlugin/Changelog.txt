@@ -1,3 +1,15 @@
+0.6.58
+Command sending reworked for reliability (HomeKit/Home tiles stay in step with the AC)
+- Network errors, timeouts and non-ack replies are retried in place with back-off (up to 5 attempts / 45s)
+- Status polling can no longer be held up by a failed command
+- Newest command for a setting wins; older queued or retrying copies are dropped
+- Current access token used at send time; re-login only on authorisation failure
+- Fixed login loop between status check and re-login during Actron outages
+- Setpoints update in Indigo only once Actron acknowledges; status re-read after commands finish
+- Abandoned commands log a warning and refresh status
+- Heater/Cooler on states now follow the compressor (Home shows Heating/Cooling, not Idle)
+- Zone OFF action now marks the zone disabled
+
 0.6.57
 Fix boolean states incorrectly set to empty strings
 quietMode initialised as False (not "") in getSystemStatus and parseFullStatusBroadcast

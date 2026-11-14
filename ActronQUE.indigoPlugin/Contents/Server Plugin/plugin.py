@@ -1567,38 +1567,6 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(f"Compressor {compMode=} {compressorRunning=} -> {heaterIsOn=} {coolerIsOn=}")
 
                 if 'RemoteZoneInfo' in jsonResponse['lastKnownState']:
-                    async def start_washing(self) -> None:
-                        if not self._device:
-                            raise RuntimeError("Not connected")
-                        _LOGGER.debug("start_washing() called")
-                        await self._run(self._device.start_washing)
-
-                    async def pause_washing(self) -> None:
-                        if not self._device:
-                            raise RuntimeError("Not connected")
-                        _LOGGER.debug("pause_washing() called")
-                        await self._run(self._device.pause_washing)
-
-                    async def start_drying(self) -> None:
-                        if not self._device:
-                            raise RuntimeError("Not connected")
-                        _LOGGER.debug("start_drying() called")
-                        await self._run(self._device.start_drying)
-
-                    async def stop_drying(self) -> None:
-                        if not self._device:
-                            raise RuntimeError("Not connected")
-                        _LOGGER.debug("stop_drying() called")
-                        await self._run(self._device.stop_drying)
-
-                    async def start_draining(self, clean_water_tank: bool = False) -> None:
-                        """
-                        Start drainage; if clean_water_tank is True, also empty clean tank when supported.
-                        """
-                        if not self._device:
-                            raise RuntimeError("Not connected")
-                        _LOGGER.debug("start_draining(clean_water_tank=%r) called", clean_water_tank)
-                        await self._run(self._device.start_draining, clean_water_tank)
                     for x in range (0,8):
                         ## go through all zones
                         self.logger.debug("Zone Number:"+str(x))
